@@ -1,40 +1,40 @@
 # Credo - Prueba de concepto SSI
 
-**Prueba de concepto** para evaluar la tecnolog?a [Credo-TS](https://credo.js.org/), framework de identidad auto-soberana (SSI) y credenciales verificables.
+**Prueba de concepto** para evaluar la tecnologia [Credo-TS](https://credo.js.org/), framework de identidad auto-soberana (SSI) y credenciales verificables.
 
-## Intenci?n del proyecto
+## Intencion del proyecto
 
-El objetivo es **simular un entorno real** donde Credo opera sobre **servicios externos** (agn?sticos a Credo), en lugar de usar almacenamiento o criptograf?a locales embebidos. Esto permite:
+El objetivo es **simular un entorno real** donde Credo opera sobre **servicios externos** (agnosticos a Credo), en lugar de usar almacenamiento o criptografia locales embebidos. Esto permite:
 
-- Validar la integraci?n de Credo con infraestructura distribuida
+- Validar la integracion de Credo con infraestructura distribuida
 - Probar arquitecturas que separan KMS, storage y DID en servicios dedicados
-- Facilitar el escalado y la operaci?n en producci?n
+- Facilitar el escalado y la operacion en produccion
 
 ## Arquitectura
 
 ```
-                    ???????????????????
-                    ?  kms-service    ?  ? Gesti?n de claves (remoto)
-                    ?  :4001          ?
-                    ???????????????????
-                             ?
-                    ???????????????????
-                    ? storage-service ?  ? Persistencia de registros (remoto)
-                    ?  :4002          ?
-                    ???????????????????
-                             ?
-                    ???????????????????
-                    ?  did-service    ?  ? Registro y resoluci?n de DIDs (remoto)
-                    ?  :4003          ?
-                    ???????????????????
-                             ?
-        ???????????????????????????????????????????
-        ?                    ?                    ?
-   ???????????         ?????????????        ???????????
-   ? issuer  ?         ?  holder   ?        ?verifier ?
-   ? :3000   ?         ?  :9005    ?        ? :9004   ?
-   ? (Credo) ?         ? (Credo)   ?        ? (Credo) ?
-   ???????????         ?????????????        ???????????
+                    +-----------------+
+                    |  kms-service    |  <- Gestion de claves (remoto)
+                    |  :4001          |
+                    +--------+--------+
+                             |
+                    +--------+--------+
+                    | storage-service |  <- Persistencia de registros (remoto)
+                    |  :4002          |
+                    +--------+--------+
+                             |
+                    +--------+--------+
+                    |  did-service    |  <- Registro y resolucion de DIDs (remoto)
+                    |  :4003          |
+                    +--------+--------+
+                             |
+        +--------------------+--------------------+
+        |                    |                    |
+   +---------+         +-----------+        +----------+
+   | issuer  |         |  holder   |        | verifier |
+   | :3000   |         |  :9005    |        | :9004    |
+   | (Credo) |         | (Credo)   |        | (Credo)  |
+   +---------+         +-----------+        +----------+
 ```
 
 Los **agentes Credo** (issuer, holder, verifier) delegan KMS, storage y DID en servicios HTTP independientes.
@@ -43,21 +43,21 @@ Los **agentes Credo** (issuer, holder, verifier) delegan KMS, storage y DID en s
 
 ## Servicios
 
-### Servicios agn?sticos (sin Credo)
+### Servicios agnosticos (sin Credo)
 
-| Servicio          | Puerto | Descripci?n |
+| Servicio          | Puerto | Descripcion |
 |-------------------|--------|-------------|
-| **kms-service**   | 4001   | Gesti?n de claves: creaci?n, cifrado, descifrado. Expone API REST para keys, encrypt, decrypt. |
-| **storage-service** | 4002 | Almacenamiento gen?rico por (type, id). Credo persiste DidRecord, ConnectionRecord, OutOfBandRecord, etc. |
-| **did-service**   | 4003   | Registro y resoluci?n de DIDs (ej. `did:custom`). Credo lo usa como DID resolver y registrar. |
+| **kms-service**   | 4001   | Gestion de claves: creacion, cifrado, descifrado. Expone API REST para keys, encrypt, decrypt. |
+| **storage-service** | 4002 | Almacenamiento generico por (type, id). Credo persiste DidRecord, ConnectionRecord, OutOfBandRecord, etc. |
+| **did-service**   | 4003   | Registro y resolucion de DIDs (ej. `did:custom`). Credo lo usa como DID resolver y registrar. |
 
 ### Servicios con Credo
 
-| Servicio          | Puerto API / DIDComm | Descripci?n |
+| Servicio          | Puerto API / DIDComm | Descripcion |
 |-------------------|----------------------|-------------|
 | **issuer-service** | 3000 / 3001          | Emisor de credenciales. Crea invitaciones OOB, emite credenciales. |
 | **holder-service**| 9005 / 9205           | Poseedor de credenciales. Recibe invitaciones, almacena credenciales. |
-| **verifier-service** | 9004 / 9204        | Verificador. Crea invitaciones de presentaci?n, verifica credenciales. |
+| **verifier-service** | 9004 / 9204        | Verificador. Crea invitaciones de presentacion, verifica credenciales. |
 
 ---
 
@@ -85,9 +85,9 @@ curl http://localhost:9005/health  # holder
 curl http://localhost:9004/health  # verifier
 ```
 
-### Flujo b?sico (OOB + DIDComm)
+### Flujo basico (OOB + DIDComm)
 
-1. **Crear invitaci?n** (issuer):
+1. **Crear invitacion** (issuer):
    ```bash
    curl -X POST http://localhost:3000/create-invitation \
      -H "Content-Type: application/json" \
@@ -95,20 +95,20 @@ curl http://localhost:9004/health  # verifier
    ```
    Respuesta: `invitation` (URL `didcomm://?oob=...`).
 
-2. **Recibir invitaci?n** (holder):
+2. **Recibir invitacion** (holder):
    ```bash
    curl -X POST http://localhost:9005/receive-invitation \
      -H "Content-Type: application/json" \
      -d '{"invitationUrl":"<invitation del paso 1>"}'
    ```
 
-### Colecci�n Postman
+### Coleccion Postman
 
-Para probar el flujo con Postman, importa la colecci�n:
+Para probar el flujo con Postman, importa la coleccion:
 
 - **`postman/Issuer-Holder-Connection.postman_collection.json`**
 
-Incluye los requests para crear invitaci�n (issuer) y recibirla (holder). La variable `invitationUrl` se rellena autom�ticamente entre pasos. Ver `postman/README.md` para m�s detalles.
+Incluye los requests para crear invitacion (issuer) y recibirla (holder). La variable `invitationUrl` se rellena automaticamente entre pasos. Ver `postman/README.md` para mas detalles.
 
 ---
 
@@ -123,7 +123,7 @@ cd ../kms-service && npm install
 cd ../storage-service && npm install
 cd ../did-service && npm install
 
-# Levantar servicios agn?sticos primero
+# Levantar servicios agnosticos primero
 # Luego issuer, holder, verifier
 ```
 
@@ -134,9 +134,9 @@ Variables de entorno relevantes:
 
 ---
 
-## Tecnolog?as
+## Tecnologias
 
-- [Credo-TS](https://credo.js.org/) ? Framework SSI
-- NestJS ? API REST
-- SQLite ? Persistencia en kms, storage y did
-- Docker ? Orquestaci?n
+- [Credo-TS](https://credo.js.org/) - Framework SSI
+- NestJS - API REST
+- SQLite - Persistencia en kms, storage y did
+- Docker - Orquestacion
