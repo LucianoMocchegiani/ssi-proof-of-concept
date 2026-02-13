@@ -12,32 +12,27 @@ El objetivo es **simular un entorno real** donde Credo opera sobre **servicios e
 
 ## Arquitectura
 
+Servicios agnosticos (KMS, storage, DID) y agentes Credo se comunican de forma independiente:
+
 ```
-                    +-----------------+
-                    |  kms-service    |  <- Gestion de claves (remoto)
-                    |  :4001          |
-                    +--------+--------+
-                             |
-                    +--------+--------+
-                    | storage-service |  <- Persistencia de registros (remoto)
-                    |  :4002          |
-                    +--------+--------+
-                             |
-                    +--------+--------+
-                    |  did-service    |  <- Registro y resolucion de DIDs (remoto)
-                    |  :4003          |
-                    +--------+--------+
-                             |
-        +--------------------+--------------------+
-        |                    |                    |
-   +---------+         +-----------+        +----------+
-   | issuer  |         |  holder   |        | verifier |
-   | :3000   |         |  :9005    |        | :9004    |
-   | (Credo) |         | (Credo)   |        | (Credo)  |
-   +---------+         +-----------+        +----------+
+  +-----------------+   +-----------------+   +-----------------+
+  |  kms-service    |   | storage-service |   |  did-service    |
+  |  :4001          |   |  :4002          |   |  :4003          |
+  |  (claves)       |   |  (registros)    |   |  (DIDs)         |
+  +--------+--------+   +--------+--------+   +--------+--------+
+           |                    |                    |
+           +--------------------+--------------------+
+                                |
+              +-----------------+-----------------+
+              |                 |                 |
+        +-----v-----+     +-----v-----+     +-----v-----+
+        | issuer    |     | holder    |     | verifier  |
+        | :3000     |     | :9005     |     | :9004     |
+        | (Credo)   |     | (Credo)   |     | (Credo)   |
+        +-----------+     +-----------+     +-----------+
 ```
 
-Los **agentes Credo** (issuer, holder, verifier) delegan KMS, storage y DID en servicios HTTP independientes.
+Cada agente (issuer, holder, verifier) se conecta directamente a los tres servicios.
 
 ---
 
