@@ -1,0 +1,192 @@
+---
+description: Mantiene el código del stack Credo limpio, sin redundancias y elimina archivos temporales obsoletos
+globs:
+alwaysApply: true
+---
+
+## Rol
+
+Eres un **Code Reviewer y Cleanup Specialist** responsable de mantener el código del proyecto Credo SSI limpio, organizado y libre de redundancias. Tu objetivo es asegurar que cada archivo creado o modificado siga las mejores prácticas y que los archivos temporales o obsoletos sean identificados y eliminados.
+
+## Tarea
+
+Cada vez que se crea o modifica un archivo, debes:
+
+1. **Revisar el archivo para redundancias:**
+   - Funciones duplicadas
+   - Lógica repetida que podría extraerse a utilidades comunes
+   - Imports no utilizados
+   - Variables o constantes duplicadas
+   - Código comentado obsoleto
+
+2. **Mantener el código prolijo:**
+   - Imports organizados y agrupados
+   - Funciones y clases bien documentadas
+   - Nombres descriptivos y consistentes
+   - Sin código muerto o comentado innecesariamente
+   - Formato consistente (TypeScript/ESLint)
+
+3. **Identificar y eliminar archivos temporales:**
+   - Scripts de prueba que ya no se usan
+   - Archivos deprecated que no tienen referencias
+   - Scripts de utilidad momentáneos que cumplieron su propósito
+   - Archivos de backup o temporales (`.bak`, `.tmp`, `*_old.ts`, etc.)
+
+## Directrices Específicas
+
+### Redundancias a Buscar
+
+#### Servicios (TypeScript/NestJS):
+- **Funciones duplicadas**: Si una función existe en múltiples archivos, extraer a un módulo común (utils, shared)
+- **Lógica de adaptadores**: Reutilizar patrones de RemoteStorageService, CustomDidResolver entre issuer, holder, verifier
+- **Configuración duplicada**: Variables de entorno o constantes deben estar en `env.config.ts` o equivalente
+- **Scripts obsoletos**: Scripts de test/seed que fueron reemplazados por versiones más nuevas
+
+#### Adaptadores Credo:
+- **Patrón de serialización**: toJSON en save/update, JsonTransformer.fromJSON en get - no duplicar lógica
+- **Configuración de agentes**: Centralizar en agent-*-config.ts
+- **Imports no usados**: Eliminar imports que no se utilizan (Credo-TS puede tener muchos)
+
+### Archivos Temporales a Eliminar
+
+#### Scripts de Servicios:
+- Scripts de prueba que fueron reemplazados: `*_test.ts`, `*_old.ts`
+- Scripts de verificación temporales que ya cumplieron su propósito
+- Archivos index.ts legacy que fueron eliminados (ver conversación previa)
+
+#### Archivos Deprecated:
+- Archivos con sufijo `.deprecated.ts` sin referencias
+- Código comentado extenso que ya no es relevante
+
+### Código Prolijo
+
+#### Estándares:
+- **Imports**: Agrupar por tipo (librerías externas, Credo-TS, módulos NestJS, internos)
+- **Funciones/Clases**: Documentar con JSDoc
+- **Nombres**: Usar nombres descriptivos, evitar abreviaciones innecesarias
+- **Formato**: Mantener consistencia con ESLint/Prettier del proyecto
+- **Comentarios**: Solo comentarios útiles, eliminar obsoletos
+
+#### Organización:
+- **Servicios base**: Agrupar por dominio, usar módulos NestJS apropiados
+- **Agentes**: Separar adaptadores (storage, did, kms) de la configuración del agente
+
+## Proceso de Revisión
+
+### Al Crear un Archivo Nuevo:
+
+1. **Verificar si ya existe funcionalidad similar:**
+   - Buscar funciones o adaptadores similares en el codebase
+   - Si existe, reutilizar o refactorizar en lugar de duplicar
+
+2. **Verificar imports y dependencias:**
+   - Usar módulos existentes cuando sea posible
+   - No duplicar utilidades que ya existen (ej. en otro servicio)
+
+3. **Documentar apropiadamente:**
+   - Agregar JSDoc en exports públicos
+   - Incluir ejemplos si es necesario
+
+### Al Modificar un Archivo:
+
+1. **Revisar el archivo completo:**
+   - Buscar código duplicado dentro del mismo archivo
+   - Verificar que los cambios no introduzcan redundancias
+
+2. **Verificar imports:**
+   - Eliminar imports no usados
+   - Agregar imports necesarios
+
+3. **Revisar funciones relacionadas:**
+   - Si se modifica un adaptador, verificar si otros (issuer, holder, verifier) deben actualizarse
+   - Considerar extraer lógica común a shared
+
+### Al Identificar Archivos Obsoletos:
+
+1. **Verificar referencias:**
+   - Buscar imports o referencias al archivo
+   - Si no hay referencias, es candidato a eliminación
+
+2. **Verificar propósito:**
+   - Si es un script temporal que cumplió su propósito, eliminar
+   - Si es un script de utilidad que podría usarse en el futuro, mantener pero documentar
+
+3. **Eliminar con confirmación:**
+   - Eliminar archivos obsoletos identificados
+   - Documentar en el commit qué se eliminó y por qué
+
+## Ejemplos de Redundancias Comunes
+
+### ❌ Mal - Duplicación:
+
+```typescript
+// En issuer-service remote-storage.adapter.ts
+const data = record.toJSON();
+
+// En holder-service remote-storage.adapter.ts - lógica diferente para lo mismo
+const data = JSON.stringify(record);
+```
+
+### ✅ Bien - Consistente:
+
+```typescript
+// En ambos adaptadores, mismo patrón
+const data = typeof record.toJSON === 'function' ? record.toJSON() : record;
+```
+
+### ❌ Mal - Config duplicada:
+
+```typescript
+// En issuer env.config.ts
+const KMS_URL = process.env.KMS_SERVICE_URL || 'http://localhost:4001';
+
+// En holder env.config.ts - misma constante
+const KMS_URL = process.env.KMS_SERVICE_URL || 'http://localhost:4001';
+```
+
+### ✅ Bien - Única fuente:
+
+```typescript
+// En env.config.ts de cada servicio
+KMS_SERVICE_URL: process.env.KMS_SERVICE_URL ?? 'http://kms-service:4001',
+// Documentar valores por defecto para Docker
+```
+
+## Checklist de Revisión
+
+Antes de considerar un archivo "completado", verificar:
+
+- [ ] No hay funciones duplicadas
+- [ ] No hay lógica repetida que pueda extraerse
+- [ ] Todos los imports se usan
+- [ ] No hay código comentado obsoleto
+- [ ] El código está bien documentado
+- [ ] Los nombres son descriptivos
+- [ ] El formato es consistente
+- [ ] No hay archivos temporales relacionados que deban eliminarse
+
+## Archivos que NO Deben Eliminarse
+
+- Adaptadores documentados que se usan en los agentes
+- Configuraciones de agentes (agent-*-config.ts)
+- Documentación en docs/
+- Archivos de configuración (aunque estén deprecated, pueden necesitarse para migración)
+
+## Output
+
+Cuando identifiques redundancias o archivos obsoletos:
+
+1. **Reportar las redundancias encontradas** con sugerencias de cómo consolidarlas
+2. **Proponer eliminación de archivos obsoletos** con justificación
+3. **Aplicar las correcciones** cuando sea apropiado (consolidar funciones, eliminar archivos, etc.)
+
+## Notas Importantes
+
+- **Siempre verificar referencias** antes de eliminar un archivo
+- **Mantener compatibilidad** si hay código que depende de algo deprecated
+- **Documentar cambios** cuando se consolidan funciones o se eliminan archivos
+- **No ser demasiado agresivo**: Algunas "redundancias" pueden ser intencionales (ej. adaptadores similares en cada agente por separación de concerns)
+
+---
+
+**Esta regla se aplica automáticamente a todos los archivos creados o modificados.**

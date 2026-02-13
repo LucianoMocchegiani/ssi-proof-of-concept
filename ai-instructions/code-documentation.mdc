@@ -1,0 +1,271 @@
+---
+description: Agrega documentación JSDoc automáticamente mientras desarrollas código en el stack Credo SSI
+globs:
+  - kms-service/**/*.ts
+  - storage-service/**/*.ts
+  - did-service/**/*.ts
+  - issuer-service/**/*.ts
+  - holder-service/**/*.ts
+  - verifier-service/**/*.ts
+alwaysApply: true
+---
+
+## Rol
+
+Actúa como un **Technical Documentation Specialist** que genera documentación JSDoc clara, concisa y útil para el código TypeScript/NestJS del stack Credo mientras se escribe.
+
+## Tarea
+
+Mientras el desarrollador escribe código, esta regla se aplica automáticamente para agregar documentación JSDoc apropiada a:
+
+1. **Funciones y métodos exportados**
+2. **Clases y servicios NestJS**
+3. **Controllers y endpoints**
+4. **DTOs y clases de validación**
+5. **Adaptadores Credo (RemoteStorage, CustomDidResolver, etc.)**
+6. **Módulos NestJS públicos**
+
+## Qué Documentar
+
+### ✅ Sí Documentar
+
+- **Controllers NestJS**: Propósito del controller, endpoints principales
+- **Endpoints**: Parámetros, respuestas, códigos de error
+- **DTOs**: Propósito del DTO, campos importantes
+- **Servicios**: Funcionalidad, dependencias clave
+- **Adaptadores**: Propósito, cómo se integra con Credo
+- **Funciones exportadas**: Propósito, parámetros, retorno
+- **Métodos públicos**: Funcionalidad, parámetros, retorno
+- **Clases**: Propósito, uso principal
+
+### ❌ No Documentar
+
+- Imports/exports simples
+- Variables locales
+- Getters/setters triviales
+- Tests (los tests son autoexplicativos)
+- Código boilerplate
+- Configuraciones obvias
+
+## Formato JSDoc
+
+### Para Controllers NestJS
+
+```typescript
+import { Controller, Post, Body } from '@nestjs/common';
+
+/**
+ * Controller para gestionar invitaciones OOB del issuer.
+ *
+ * Expone endpoints para crear invitaciones que el holder puede usar
+ * para establecer conexión DIDComm.
+ */
+@Controller('invitations')
+export class InvitationController {
+  /**
+   * Crea una nueva invitación OOB.
+   *
+   * Genera una URL que el holder puede usar en POST /receive-invitation
+   * para establecer la conexión.
+   *
+   * @returns URL de invitación OOB
+   * @throws BadRequestException si el agente no está inicializado
+   */
+  @Post('create')
+  async createInvitation(): Promise<{ invitationUrl: string }> {
+    // implementación
+  }
+}
+```
+
+### Para DTOs
+
+```typescript
+import { IsString, IsOptional } from 'class-validator';
+
+/**
+ * DTO para recibir una invitación OOB.
+ *
+ * El holder usa este DTO al llamar POST /receive-invitation
+ * para establecer conexión con el issuer.
+ */
+export class ReceiveInvitationDto {
+  /** URL de invitación OOB generada por el issuer */
+  @IsString()
+  invitationUrl: string;
+
+  /** ID de wallet (opcional, por defecto usa wallet por servicio) */
+  @IsOptional()
+  @IsString()
+  walletId?: string;
+}
+```
+
+### Para Servicios y Adaptadores
+
+```typescript
+/**
+ * Adaptador de storage remoto para agentes Credo.
+ *
+ * Implementa IStorageService de Credo-TS comunicándose con storage-service.
+ * Usa scope por walletId: tipo de registro = `walletId::RecordType`.
+ *
+ * Serialización: save/update usan record.toJSON().
+ * Deserialización: getById/getAll usan JsonTransformer.fromJSON().
+ * getById devuelve null en 404 (no lanza error).
+ */
+export class RemoteStorageService implements IStorageService {
+  /**
+   * Obtiene un registro por tipo e ID.
+   *
+   * @param recordClass - Clase Credo del registro (ej. StorageVersionRecord)
+   * @param id - ID del registro
+   * @returns Instancia del registro o null si no existe
+   */
+  async getById<T>(recordClass: { new (...args: any[]): T }, id: string): Promise<T | null> {
+    // implementación
+  }
+}
+```
+
+### Para CustomDidResolver / CustomDidRegistrar
+
+```typescript
+/**
+ * Resuelve DIDs did:custom consultando did-service.
+ *
+ * Credo-TS llama a este adaptador cuando necesita resolver un DID
+ * durante el flujo de conexión o verificación.
+ *
+ * @see did-service GET /did/:id
+ */
+export class CustomDidResolver implements IDidResolver {
+  /**
+   * Resuelve un DID document.
+   *
+   * @param did - DID a resolver (ej. did:custom:xxx)
+   * @returns DID document o null si no existe
+   */
+  async resolve(did: string): Promise<DIDDocument | null> {
+    // implementación
+  }
+}
+```
+
+### Para Configuración de Agentes
+
+```typescript
+/**
+ * Configuración del agente Credo para el issuer.
+ *
+ * Incluye autoUpdateStorageOnStartup para migrar storage version 0.1 a 0.5.
+ * Los adaptadores (storage, kms, did) se inyectan desde los módulos NestJS.
+ */
+export const agentIssuerConfig: AgentConfig = {
+  config: {
+    label: 'issuer-agent',
+    walletConfig: { id: 'issuer-wallet', key: '...' },
+    autoUpdateStorageOnStartup: true,
+  },
+  dependencies: agentDependencies,
+};
+```
+
+### Para Funciones de Utilidad
+
+```typescript
+/**
+ * Construye la URL del storage-service para un tipo de registro.
+ *
+ * El scope combina walletId y RecordType: `walletId::RecordType`.
+ *
+ * @param walletId - ID del wallet (ej. issuer-wallet)
+ * @param recordType - Tipo de registro Credo (ej. StorageVersionRecord)
+ * @returns Tipo de registro para usar en storage-service
+ *
+ * @example
+ * buildRecordType('issuer-wallet', 'StorageVersionRecord')
+ * // => 'issuer-wallet::StorageVersionRecord'
+ */
+export function buildRecordType(walletId: string, recordType: string): string {
+  return `${walletId}::${recordType}`;
+}
+```
+
+## Directrices Específicas del Stack Credo
+
+### Términos Comunes a Documentar
+
+- **Issuer**: Servicio que emite credenciales verificables
+- **Holder**: Servicio que recibe y almacena credenciales
+- **Verifier**: Servicio que verifica credenciales y presentaciones
+- **DID**: Identificador descentralizado (did:custom en este stack)
+- **Invitación OOB**: Flujo Out-of-Band para establecer conexión DIDComm
+- **Credencial**: Afirmación verificable sobre un sujeto
+- **RemoteStorageService**: Adaptador que persiste registros Credo en storage-service
+- **walletId**: Identificador del wallet (ej. issuer-wallet, holder-wallet)
+
+### Contexto SSI
+
+Cuando documentes, considera que:
+- El stack tiene 6 servicios: kms, storage, did (base) + issuer, holder, verifier (agentes)
+- Los agentes usan adaptadores para comunicarse con los servicios base
+- Storage usa scope walletId para separar datos entre issuer, holder, verifier
+- DIDs did:custom se registran en KMS y did-service
+- Credo-TS maneja el protocolo DIDComm; nuestros adaptadores son la capa de persistencia/comunicación
+
+### Ejemplos de Documentación Contextual
+
+```typescript
+/**
+ * Recibe una invitación OOB y establece conexión con el issuer.
+ *
+ * El holder parsea la URL de invitación, crea su DID si es necesario
+ * (vía CustomDidRegistrar), y ejecuta el protocolo de conexión DIDComm.
+ * La conexión resultante se persiste en storage-service.
+ *
+ * @param invitationUrl - URL OOB generada por issuer POST /create-invitation
+ * @param walletId - Wallet a usar (default: holder-wallet)
+ * @returns Resultado de la conexión (connectionId, etc.)
+ *
+ * @throws BadRequestException si la URL es inválida
+ * @throws InternalServerErrorException si el agente no está inicializado
+ */
+async receiveInvitation(
+  invitationUrl: string,
+  walletId?: string
+): Promise<ConnectionRecord> {
+  // implementación
+}
+```
+
+## Reglas de Estilo
+
+1. **Conciso pero descriptivo**: Explica qué hace, no cómo lo hace
+2. **Usa presente simple**: "Obtiene", "Crea", "Resuelve"
+3. **Documenta excepciones**: Usa `@throws` para errores conocidos
+4. **Incluye ejemplos**: Usa `@example` cuando ayude a la comprensión
+5. **No repitas el nombre**: No digas "Esta función obtiene" si ya se llama `getById`
+6. **Menciona integraciones**: storage-service, kms-service, did-service, Credo-TS
+
+## Alcance por Servicio
+
+La regla se aplica a todos los servicios del stack:
+
+| Servicio | Rol | Qué documentar |
+|----------|-----|-----------------|
+| **kms-service** | Gestión de claves (Ed25519, X25519) | Controllers, servicios, endpoints POST /keys, encrypt, decrypt |
+| **storage-service** | CRUD genérico de registros | Controller, servicio, endpoints /records |
+| **did-service** | Registro y resolución de DIDs | Controller, servicio, POST /did, GET /did/:id |
+| **issuer-service** | Agente emisor de credenciales | Controllers, adaptadores (storage, did, kms), invitation flow |
+| **holder-service** | Agente que recibe credenciales | Controllers, adaptadores, receive-invitation |
+| **verifier-service** | Agente verificador | Controllers, adaptadores, verify flow |
+
+## Output
+
+Documentación JSDoc agregada inline en el código mientras se escribe, sin necesidad de acción manual del desarrollador. La documentación debe ser:
+
+- **Clara**: Fácil de entender
+- **Concisa**: Sin palabrería innecesaria
+- **Útil**: Agrega valor al código
+- **Contextual**: Considera el dominio SSI (issuer, holder, verifier, credenciales, DIDs)

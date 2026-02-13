@@ -1,0 +1,293 @@
+---
+description: Genera descripciones de Pull Request completas y listas para usar basadas en la implementación realizada en el stack Credo SSI
+globs:
+alwaysApply: false
+---
+
+## Rol
+
+Actúa como un **Senior Developer Assistant y Technical Writer** responsable de generar descripciones de Pull Request claras y completas basadas en la implementación realizada durante la tarea.
+
+## Tarea
+
+1. Después de que el desarrollador complete todos los pasos en el plan de acción correspondiente, y antes de crear el PR, esta regla será activada.
+2. Analizará:
+   - El plan de acción completado (si existe en `instructions/tasks/`)
+   - El diff de archivos modificados y nuevos en el repositorio
+   - Los commits realizados
+3. Con base en eso, generará un archivo listo para copiar `[TICKET-ID]_pr-description_[FECHA-HORA].md` con una descripción completa del PR.
+4. El desarrollador copiará y pegará manualmente el contenido de este archivo en la descripción del PR en Git.
+
+## Estilo y Tono
+
+**IMPORTANTE:** Las descripciones de PR deben ser:
+- **Resumidas y concisas:** Ir directo al punto, sin texto innecesario
+- **Sin exagerar:** Evitar lenguaje pomposo o sobre-explicaciones
+- **Solo lo implementado:** Describir únicamente los cambios realizados según el plan de acción
+- **Sin emojis:** Mantener un tono profesional sin usar emojis en ninguna sección
+- **Orientadas a revisores:** Proporcionar la información justa que necesita quien revisa el código
+
+## Formato
+
+**IMPORTANTE - Nomenclatura de archivo:**
+- Antes de crear el archivo, debes obtener la fecha y hora actual ejecutando: `Get-Date -Format "yyyy-MM-dd_HH-mm-ss"` en PowerShell
+- El formato de fecha/hora será: `yyyy-MM-dd_HH-mm-ss` (ejemplo: `2024-12-04_14-30-45`)
+- El nombre del archivo debe ser: `[TICKET-ID]_pr-description_[FECHA-HORA].md` (ejemplo: `CREDO-001_pr-description_2024-12-04_14-30-45.md`)
+
+El archivo `[TICKET-ID]_pr-description_[FECHA-HORA].md` generado debe contener las siguientes secciones:
+
+```markdown
+# [Título del PR]
+<Título claro y descriptivo en una línea siguiendo Conventional Commits>
+
+## Resumen
+<Qué hace este PR técnicamente y en qué partes del sistema - ser conciso>
+
+## Motivación
+<Por qué existe este PR - qué problema o requerimiento aborda - ser directo>
+
+## Criterios de Aceptación
+- [ ] Criterio 1 (puedes buscar esta información en el action plan relacionado)
+- [ ] Criterio 2
+- [ ] Criterio 3
+
+## Cambios Técnicos
+
+### kms-service (si aplica)
+- Cambio 1
+- Cambio 2
+
+### storage-service (si aplica)
+- Cambio 1
+
+### did-service (si aplica)
+- Cambio 1
+
+### issuer-service (si aplica)
+- Cambio 1
+- Cambio 2
+
+### holder-service (si aplica)
+- Cambio 1
+
+### verifier-service (si aplica)
+- Cambio 1
+
+### Docker/Infraestructura (si aplica)
+- Cambio 1
+
+## Testing
+<Descripción breve de cómo se probó la funcionalidad>
+- [ ] Probado localmente con Docker Compose
+- [ ] Tests unitarios agregados/actualizados (si aplica)
+- [ ] Endpoints probados con curl/Postman (si aplica)
+
+## Referencias
+- Ticket: [TICKET-ID]
+- PRs relacionados: #xxx (formato Git)
+- Documentación relacionada: (si aplica)
+
+## Deployment
+
+### Cambios Requeridos
+- [ ] Rebuild Docker images
+- [ ] Actualizar variables de entorno (si aplica)
+- [ ] Reiniciar servicios Docker
+
+### Verificación Post-Deployment
+- [ ] Verificar healthchecks de servicios afectados
+- [ ] Verificar endpoints con curl/Postman
+- [ ] Verificar logs de Docker
+- [ ] Verificar flujo Issuer → Holder si aplica
+
+## Riesgos y Plan de Rollback
+<Identificar posibles riesgos y cómo revertir si algo sale mal - ser específico>
+
+## Notas Adicionales
+<Cualquier información adicional relevante para los revisores - solo si es necesario>
+
+## Anexo: Cambios Fuera del Plan (si aplica)
+
+**IMPORTANTE:** Si durante la implementación se realizaron cambios que no estaban en el plan de acción original, deben documentarse en esta sección.
+
+**Incluir:**
+- Cambios en reglas o documentación que no estaban en el plan
+- Correcciones de bugs encontrados durante la implementación
+- Mejoras adicionales realizadas
+- Actualizaciones a archivos de configuración o reglas
+- Cualquier cambio que no esté explícitamente en el plan de acción
+
+**Formato:**
+- Listar cada cambio fuera del plan
+- Explicar por qué se hizo
+- Indicar si requiere atención especial o verificación adicional
+
+**Ejemplo:**
+```markdown
+## Anexo: Cambios Fuera del Plan
+
+### Corrección de Bug Encontrado
+- **Archivo:** `issuer-service/src/storage/remote-storage.adapter.ts`
+- **Problema:** getById lanzaba error en 404 en lugar de devolver null
+- **Solución:** Devolver null cuando storage-service retorna 404
+- **Impacto:** Crítico para inicialización del agente Credo
+
+### Actualización de Reglas
+- **Archivo:** `ai-instructions/action-plan-rule.mdc`
+- **Cambio:** Adaptado para stack Credo SSI
+- **Razón:** Establecer estándar para futuros desarrollos
+```
+
+**Proceso para crear el archivo:**
+1. Primero, ejecuta el comando para obtener la fecha y hora: `Get-Date -Format "yyyy-MM-dd_HH-mm-ss"`
+2. Usa el resultado para construir el nombre del archivo: `[TICKET-ID]_pr-description_[FECHA-HORA].md`
+3. Guarda el archivo en la carpeta `instructions/prs/`
+4. Si hubo cambios fuera del plan, incluir sección "Anexo: Cambios Fuera del Plan"
+5. **IMPORTANTE:** Si existe `instructions/pending-tickets.md`, actualizarlo:
+   - Buscar la línea que contiene `- [ ] **[TICKET-ID]**` en la sección "Tickets Pendientes"
+   - Cambiar `- [ ]` por `- [x]` para marcar el ticket como completado
+   - Mover la línea de "Tickets Pendientes" a la sección "Tickets Completados (con PR)"
+   - Si el ticket no está en la lista de pendientes, agregarlo a la sección de completados
+
+El archivo debe guardarse como `[TICKET-ID]_pr-description_[FECHA-HORA].md` en la carpeta `instructions/prs/`. Debe estar limpio y listo para copiar y pegar sin editar.
+
+## Directrices Específicas del Stack Credo
+
+### Convenciones de Commits
+- Usar formato: `feat(scope):`, `fix(scope):`, `docs:`, `chore:`, `refactor:`, etc.
+- Scopes comunes: `kms`, `storage`, `did`, `issuer`, `holder`, `verifier`, `docker`
+
+### Estructura del Proyecto
+- **Servicios base**: kms-service, storage-service, did-service (NestJS + SQLite)
+- **Agentes**: issuer-service, holder-service, verifier-service (NestJS + Credo-TS)
+- **Persistencia**: SQLite (POC)
+- **Containerización**: Docker + Docker Compose
+
+### Consideraciones de Seguridad
+- Nunca incluir secretos, API keys o datos sensibles en la descripción
+- Mencionar si se agregaron/modificaron variables de entorno
+- Indicar si se requieren cambios en docker-compose o .env
+- Mencionar cambios relacionados con KMS o manejo de claves
+
+### Adaptadores y Storage
+- Mencionar si se modificaron adaptadores (RemoteStorage, CustomDidResolver, etc.)
+- Especificar si se actualizó serialización (toJSON/fromJSON)
+- Documentar cambios en scope walletId si aplica
+
+### Deployment
+- Mencionar si requiere rebuild de Docker images
+- Especificar servicios afectados
+- Indicar si hay cambios en docker-compose.yml
+- Mencionar variables de entorno nuevas o modificadas
+
+### Testing
+- Mencionar si se probó con Docker Compose
+- Indicar si se verificó flujo Issuer → Holder
+- Especificar endpoints probados con Postman
+
+### Credo-TS
+- Indicar si se actualizó versión de Credo-TS
+- Mencionar si hay cambios en autoUpdateStorageOnStartup
+- Documentar migraciones de storage version si aplica
+
+## Output
+
+- Obtener la fecha y hora actual ejecutando: `Get-Date -Format "yyyy-MM-dd_HH-mm-ss"`
+- Un archivo Markdown llamado `[TICKET-ID]_pr-description_[FECHA-HORA].md` donde `[FECHA-HORA]` es el resultado del comando anterior (formato: `yyyy-MM-dd_HH-mm-ss`)
+- Ubicado en `instructions/prs/`
+- Los desarrolladores copiarán este contenido en el campo de descripción del PR en Git
+- El archivo debe ser autocontenido y no requerir ediciones adicionales
+
+**Ejemplo de archivo generado:**
+- Nombre: `CREDO-001_pr-description_2024-12-04_14-30-45.md`
+- Ubicación: `instructions/prs/CREDO-001_pr-description_2024-12-04_14-30-45.md`
+
+## Flujo de Git Automático (Opcional)
+
+**IMPORTANTE:** Después de generar la descripción del PR, debes preguntar al usuario si desea ejecutar el flujo de Git automático.
+
+**Proceso del flujo de Git:**
+
+1. **Preguntar al usuario:** "¿Deseas ejecutar el flujo de Git automático? (crear rama, commit, push y PR)"
+
+2. **Si el usuario responde afirmativamente (sí, si, yes, y, etc.):**
+   
+   a. **Extraer ticket ID:**
+      - Del `[TICKET-ID]` (ej: `CREDO-006`)
+      - El nombre de la rama será: `CREDO-006` (usar el ticket ID completo)
+   
+   b. **Verificar estado actual:**
+      - Ejecutar `git status` para verificar que hay cambios
+      - Verificar que no estás ya en una rama con ese nombre
+   
+   c. **Crear nueva rama:**
+      - Ejecutar: `git checkout -b CREDO-006`
+      - Si la rama ya existe, preguntar si desea continuar en esa rama o usar otro nombre
+   
+   d. **Agregar todos los archivos al stage:**
+      - Ejecutar: `git add .`
+      - Verificar con `git status` que los archivos están en stage
+   
+   e. **Crear commit:**
+      - Usar el título del PR como mensaje del commit
+      - Ejecutar: `git commit -m "[Título del PR]"` (ej: `git commit -m "refactor(frontend): Componentización del Frontend y Sistema de Formas Geométricas"`)
+   
+   f. **Push de la rama:**
+      - Ejecutar: `git push -u origin CREDO-006`
+      - Esto creará la rama en el remoto y configurará el tracking
+   
+   g. **Crear Pull Request (si es posible):**
+      - Intentar crear el PR usando GitHub CLI si está disponible:
+        - Verificar si `gh` está instalado: `gh --version`
+        - Si está disponible, ejecutar:
+          ```
+          gh pr create --title "[Título del PR]" --body-file "instructions/prs/[TICKET-ID]_pr-description_[FECHA-HORA].md" --base main
+          ```
+      - Si GitHub CLI no está disponible, informar al usuario que debe crear el PR manualmente desde la interfaz web
+      - Proporcionar el enlace directo si es posible (ej: `https://github.com/[usuario]/[repo]/compare/main...CREDO-006`)
+   
+   h. **Cambiar a rama main:**
+      - Ejecutar: `git checkout main` (o `master` según el repo)
+      - Verificar que el cambio fue exitoso con `git status`
+   
+   i. **Resumen final:**
+      - Informar al usuario que:
+        - La rama fue creada y pusheada
+        - El commit fue realizado
+        - El PR fue creado (si fue posible) o debe crearse manualmente
+        - Se cambió de vuelta a main
+
+3. **Si el usuario responde negativamente (no, n, etc.):**
+   - Informar que el archivo de descripción del PR está listo en `instructions/prs/`
+   - Recordar que puede ejecutar el flujo de Git manualmente cuando lo desee
+
+**Notas importantes:**
+- Si hay cambios sin commitear en la rama actual, preguntar si desea hacer commit de esos cambios primero o descartarlos
+- Si hay conflictos durante el push, informar al usuario y detener el proceso
+- Si la creación del PR falla, continuar con el resto del flujo (rama creada, commit hecho, push realizado)
+- Siempre verificar el estado de Git antes de cada operación crítica
+- Si el usuario está en una rama diferente a main, preguntar si desea crear la nueva rama desde main o desde la rama actual
+
+**Comandos de ejemplo para el flujo completo:**
+```bash
+# 1. Verificar estado
+git status
+
+# 2. Crear rama
+git checkout -b CREDO-006
+
+# 3. Agregar archivos
+git add .
+
+# 4. Commit
+git commit -m "feat(issuer): Implementar emisión de credenciales"
+
+# 5. Push
+git push -u origin CREDO-006
+
+# 6. Crear PR (si gh está disponible)
+gh pr create --title "feat(issuer): Implementar emisión de credenciales" --body-file "instructions/prs/CREDO-006_pr-description_2025-12-05_16-34-00.md" --base main
+
+# 7. Volver a main
+git checkout main
+```

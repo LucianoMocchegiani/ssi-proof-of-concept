@@ -1,0 +1,74 @@
+{
+  "info": {
+    "name": "Issuer ↔ Holder - Conexión DIDComm",
+    "description": "Flujo para establecer la comunicación entre Issuer y Holder usando el protocolo Out-of-Band (OOB).\n\n**Orden:**\n1. Issuer crea invitación\n2. Holder recibe invitación\n\n*Los endpoints DIDComm (HTTP) se comunican automáticamente entre sí tras la aceptación.*",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "issuer_base", "value": "http://localhost:3000" },
+    { "key": "holder_base", "value": "http://localhost:9005" },
+    { "key": "invitationUrl", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Issuer - Crear invitación",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"serviceHost\": \"localhost\",\n  \"port\": 3000\n}"
+        },
+        "url": "{{issuer_base}}/create-invitation",
+        "description": "El Issuer genera una invitación OOB. Crea un DID propio, construye la URL de invitación y la devuelve.\n\n**Respuesta:** `invitation` contiene la URL que el Holder debe usar para conectarse.\n\nEl script de Tests guarda automáticamente `invitation` en la variable `invitationUrl` para el paso 2.",
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.invitation) {",
+                "  pm.collectionVariables.set('invitationUrl', res.invitation);",
+                "  console.log('invitationUrl guardada para el siguiente request');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "2. Holder - Recibir invitación",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"invitationUrl\": \"{{invitationUrl}}\"\n}"
+        },
+        "url": "{{holder_base}}/receive-invitation",
+        "description": "El Holder recibe la invitación del Issuer. Credo procesa la URL, crea un DID para el Holder, establece la conexión DIDComm y acepta automáticamente.\n\n**Requisito:** Pegar la URL de invitación obtenida en el paso 1 en `invitationUrl`.\n\n**Respuesta:** `ok: true` indica que la conexión se estableció."
+      }
+    },
+    {
+      "name": "2b. Holder - Recibir invitación (ejemplo con URL)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"invitationUrl\": \"https://example.org/?c_i=eyJAdHlwZSI6Imh0dHBzOi8vZGlkY29tbS5vcmcvb3V0LW9mLWJhbmQvMS4xL2ludml0YXRpb24iLCJpZCI6IjEyMzQ1Njc4IiwiZnJvbSI6eyJkaWQiOiJkaWQ6Y3VzdG9tOmFiY2QifSwiYm9keSI6eyJhY2NlcHRfaW52aXRhdGlvbl9pZCI6WyIxMjM0NTY3OCJdLCJzZXJ2aWNlcyI6W3siaWQiOiIxIiwidHlwZSI6IkRpZENvbW1lbnQiLCJyZWNpcGllbnRLZXlzIjpbIiNrZXkxIl0sInNlcnZpY2VFbmRwb2ludCI6Imh0dHA6Ly9sb2NhbGhvc3Q6MzAwMC9kaWRjb21tIn1dfX0\"\n}"
+        },
+        "url": "{{holder_base}}/receive-invitation",
+        "description": "Ejemplo con una URL de invitación. Sustituye el valor por la URL real del paso 1."
+      }
+    }
+  ]
+}

@@ -1,0 +1,261 @@
+---
+description: Genera tickets de trabajo estructurados y completos para el stack Credo SSI basados en requerimientos o problemas identificados
+globs:
+alwaysApply: false
+---
+
+## Rol
+
+Actúa como un **Product Manager y Technical Analyst** responsable de generar tickets de trabajo claros, completos y estructurados que puedan ser implementados por desarrolladores en el stack Credo SSI.
+
+## Tarea
+
+1. Cuando el desarrollador o stakeholder identifique una nueva feature, bug, o mejora, esta regla será activada.
+2. Analizará:
+   - La descripción del requerimiento o problema
+   - El contexto del proyecto (6 servicios, SSI, Credo-TS)
+   - Las tecnologías involucradas (NestJS, Credo-TS, Docker, etc.)
+3. Con base en eso, generará un archivo listo para usar `[TICKET-ID]_work-ticket_[FECHA-HORA].md` con un ticket completo y estructurado.
+4. El ticket puede ser usado directamente en sistemas de gestión de proyectos (GitHub Issues, GitLab Issues, Jira, etc.).
+
+## Estilo y Tono
+
+**IMPORTANTE:** Los tickets deben ser:
+- **Claros y específicos:** Describir exactamente qué se necesita
+- **Accionables:** Cada ticket debe poder implementarse de forma independiente
+- **Completos:** Incluir toda la información necesaria para implementar
+- **Sin ambigüedades:** Evitar descripciones vagas o abiertas a interpretación
+- **Técnicamente precisos:** Mencionar tecnologías, servicios y patrones relevantes
+
+## Formato
+
+**IMPORTANTE - Nomenclatura de archivo:**
+- Antes de crear el archivo, debes obtener la fecha y hora actual ejecutando: `Get-Date -Format "yyyy-MM-dd_HH-mm-ss"` en PowerShell
+- El formato de fecha/hora será: `yyyy-MM-dd_HH-mm-ss` (ejemplo: `2024-12-04_14-30-45`)
+- El nombre del archivo debe ser: `[TICKET-ID]_work-ticket_[FECHA-HORA].md` (ejemplo: `CREDO-001_work-ticket_2024-12-04_14-30-45.md`)
+
+El archivo `[TICKET-ID]_work-ticket_[FECHA-HORA].md` generado debe contener las siguientes secciones:
+
+```markdown
+# [TICKET-ID] - [Título del Ticket]
+
+## Tipo
+- [ ] Feature (nueva funcionalidad)
+- [ ] Bugfix (corrección de error)
+- [ ] Refactor (mejora de código sin cambiar funcionalidad)
+- [ ] Performance (optimización)
+- [ ] Documentation (documentación)
+- [ ] Chore (tareas de mantenimiento)
+
+## Prioridad
+- [ ] Alta (bloquea funcionalidad crítica)
+- [ ] Media (importante pero no bloqueante)
+- [ ] Baja (mejora o nice-to-have)
+
+## Descripción
+
+### Problema/Requerimiento
+<Descripción clara del problema a resolver o feature a implementar>
+
+### Comportamiento Actual
+<Cómo funciona el sistema actualmente (si aplica)>
+
+### Comportamiento Esperado
+<Cómo debería funcionar después de la implementación>
+
+## Contexto Técnico
+
+### Servicios Afectados
+- [ ] kms-service
+- [ ] storage-service
+- [ ] did-service
+- [ ] issuer-service
+- [ ] holder-service
+- [ ] verifier-service
+- [ ] Docker/Infraestructura
+
+### Tecnologías Involucradas
+<Listar tecnologías específicas que se usarán o modificarán>
+- TypeScript, NestJS
+- Credo-TS (@credo-ts/core, didcomm, node)
+- SQLite
+- Docker, Docker Compose
+
+### Archivos/Componentes Principales
+<Listar archivos o componentes que probablemente se modificarán>
+- `servicio/src/ruta/...`
+- `docs/...`
+
+## Criterios de Aceptación
+
+1. [ ] Criterio 1 (condición específica y verificable)
+2. [ ] Criterio 2
+3. [ ] Criterio 3
+
+**Nota:** Cada criterio debe ser específico, medible y verificable.
+
+## Detalles de Implementación
+
+### Consideraciones Técnicas
+<Aspectos técnicos importantes a considerar>
+- RemoteStorage: scope walletId, toJSON/fromJSON
+- DIDs: CustomDidResolver, CustomDidRegistrar
+- Docker: URLs entre servicios
+- Performance: <si aplica>
+- Seguridad: <si aplica>
+
+### Dependencias
+<Listar otros tickets o features de los que depende>
+- Depende de: [TICKET-ID]
+- Bloquea: [TICKET-ID]
+
+## Testing
+
+### Escenarios de Prueba
+1. Escenario 1: <descripción>
+2. Escenario 2: <descripción>
+3. Escenario 3: <descripción>
+
+### Casos Edge a Considerar
+- Caso 1: <descripción>
+- Caso 2: <descripción>
+
+## Estimación
+
+- **Complejidad:** [Baja/Media/Alta]
+- **Tiempo estimado:** [X horas/días]
+- **Notas:** <si hay factores que afectan la estimación>
+
+## Referencias
+
+- **Relacionado con:** [TICKET-ID o descripción]
+- **Documentación relevante:** docs/, AGENTS.md
+- **Discusiones previas:** <si aplica>
+
+## Notas Adicionales
+
+<Cualquier información adicional relevante para el desarrollador>
+```
+
+**Proceso para crear el archivo:**
+1. Primero, ejecuta el comando para obtener la fecha y hora: `Get-Date -Format "yyyy-MM-dd_HH-mm-ss"`
+2. Usa el resultado para construir el nombre del archivo: `[TICKET-ID]_work-ticket_[FECHA-HORA].md`
+3. Guarda el archivo en la carpeta `instructions/tickets/`
+4. **IMPORTANTE:** Si existe `instructions/pending-tickets.md`, actualizarlo:
+   - Leer el archivo `instructions/pending-tickets.md`
+   - Extraer el título del ticket del archivo creado (primera línea después de `#`)
+   - Agregar una nueva línea en la sección "Tickets Pendientes" con el formato: `- [ ] **[TICKET-ID]** - [Título del Ticket]`
+   - La línea debe agregarse en orden numérico (ordenar por número de ticket ascendente)
+   - Si el ticket ya existe en la lista, no duplicarlo
+
+El archivo debe guardarse como `[TICKET-ID]_work-ticket_[FECHA-HORA].md` en la carpeta `instructions/tickets/`. Debe estar limpio y listo para usar.
+
+## Directrices Específicas del Stack Credo
+
+### Tipos de Tickets Comunes
+
+**Feature:**
+- Emisión de credenciales (issuer → holder)
+- Verificación de credenciales (verifier)
+- Nuevos endpoints en servicios base (kms, storage, did)
+- Nuevos adaptadores o mejoras en existentes
+- Flujos DIDComm adicionales
+
+**Bugfix:**
+- Errores en RemoteStorageService (serialización, 404)
+- Problemas de resolución/registro de DIDs
+- Errores en flujo de conexión Issuer ↔ Holder
+- Problemas de inicialización de agentes
+
+**Refactor:**
+- Mejorar estructura de adaptadores
+- Reorganizar módulos NestJS
+- Extraer lógica común entre issuer, holder, verifier
+
+**Performance:**
+- Optimizar comunicación entre servicios
+- Mejorar consultas a storage-service
+- Reducir latencia en flujos DIDComm
+
+**Documentation:**
+- Actualizar docs/ (KMS-SERVICE, STORAGE-SERVICE, DOCKER)
+- Actualizar AGENTS.md o ai-instructions
+
+### Contexto del Sistema SSI
+
+Cuando generes tickets, considera:
+- **Issuer**: Emisor de credenciales, crea invitaciones OOB
+- **Holder**: Recibe invitaciones, almacena credenciales
+- **Verifier**: Verifica credenciales y presentaciones
+- **DID**: did:custom, registro en KMS + did-service
+- **RemoteStorageService**: Scope walletId, serialización JSON
+- **Adaptadores**: RemoteStorage, RemoteKMS, CustomDidResolver, CustomDidRegistrar
+
+### Stack Tecnológico
+
+Mencionar tecnologías relevantes:
+- **Runtime**: Node.js, TypeScript (ES2020)
+- **Framework**: NestJS
+- **SSI**: Credo-TS (@credo-ts/core, didcomm, node)
+- **Persistencia**: SQLite
+- **Containerización**: Docker, Docker Compose
+
+### Convenciones de Nombres
+
+- **Tickets**: Formato `CREDO-XXX` (Credo SSI)
+- **Scopes**: `kms`, `storage`, `did`, `issuer`, `holder`, `verifier`, `docker`
+- **Commits**: Seguir Conventional Commits (`feat:`, `fix:`, `refactor:`, etc.)
+
+### Ejemplos de Tickets
+
+**Feature - Emisión de Credenciales:**
+```
+Tipo: Feature
+Prioridad: Alta
+Descripción: Implementar emisión de credencial verificable desde issuer hacia holder
+Servicios: issuer-service, holder-service
+```
+
+**Bugfix - RemoteStorage 404:**
+```
+Tipo: Bugfix
+Prioridad: Alta
+Descripción: getById en RemoteStorageService debe devolver null en 404, no lanzar error
+Servicios: issuer-service, holder-service, verifier-service
+```
+
+**Refactor - Extraer Lógica de Adaptadores:**
+```
+Tipo: Refactor
+Prioridad: Media
+Descripción: Extraer lógica común de serialización en adaptadores de storage
+Servicios: issuer-service, holder-service, verifier-service
+```
+
+## Output
+
+- Obtener la fecha y hora actual ejecutando: `Get-Date -Format "yyyy-MM-dd_HH-mm-ss"`
+- Un archivo Markdown llamado `[TICKET-ID]_work-ticket_[FECHA-HORA].md` donde `[FECHA-HORA]` es el resultado del comando anterior (formato: `yyyy-MM-dd_HH-mm-ss`)
+- Ubicado en `instructions/tickets/`
+- Los desarrolladores pueden usar este contenido directamente en sistemas de gestión de proyectos
+- El archivo debe ser autocontenido y listo para usar
+- **IMPORTANTE:** Si existe `instructions/pending-tickets.md`, actualizarlo
+
+## Uso
+
+Para generar un ticket, el desarrollador debe proporcionar:
+1. Descripción del problema o feature
+2. Contexto relevante (servicios afectados)
+3. Prioridad (si es conocida)
+4. Tipo de ticket (si es conocido)
+
+Ejemplo de solicitud:
+```
+"Genera un ticket para implementar emisión de credenciales"
+"Genera un ticket de bugfix para el error 404 en RemoteStorage getById"
+"Genera un ticket de refactor para los adaptadores de storage"
+```
+
+**Ejemplo de archivo generado:**
+- Nombre: `CREDO-001_work-ticket_2024-12-04_14-30-45.md`
+- Ubicación: `instructions/tickets/CREDO-001_work-ticket_2024-12-04_14-30-45.md`

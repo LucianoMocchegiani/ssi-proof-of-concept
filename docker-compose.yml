@@ -1,0 +1,128 @@
+services:
+  kms-service:
+    build: ./kms-service
+    ports:
+      - "4001:4001"
+    environment:
+      KMS_SERVICE_PORT: 4001
+      KMS_SQLITE_PATH: /app/data/kms.sqlite
+    volumes:
+      - kms-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4001/health',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  storage-service:
+    build: ./storage-service
+    ports:
+      - "4002:4002"
+    environment:
+      STORAGE_SERVICE_PORT: 4002
+      STORAGE_SQLITE_PATH: /app/data/storage.sqlite
+    volumes:
+      - storage-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4002/health',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  did-service:
+    build: ./did-service
+    ports:
+      - "4003:4003"
+    environment:
+      DID_SERVICE_PORT: 4003
+      DID_SQLITE_PATH: /app/data/did.sqlite
+    volumes:
+      - did-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4003/health',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  issuer-service:
+    build: ./issuer-service
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    environment:
+      PORT: 3000
+      DIDCOMM_PORT: 3001
+      SERVICE_HOST: issuer-service
+      DIDCOMM_ENDPOINT: http://issuer-service:3000
+      USE_REMOTE_KMS: "true"
+      REMOTE_KMS_URL: http://kms-service:4001
+      USE_REMOTE_STORAGE: "true"
+      REMOTE_STORAGE_URL: http://storage-service:4002
+      DID_SERVICE_URL: http://did-service:4003
+    depends_on:
+      kms-service:
+        condition: service_healthy
+      storage-service:
+        condition: service_healthy
+      did-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  holder-service:
+    build: ./holder-service
+    ports:
+      - "9005:9005"
+      - "9205:9205"
+    environment:
+      PORT: 9005
+      DIDCOMM_PORT: 9205
+      SERVICE_HOST: holder-service
+      DIDCOMM_ENDPOINT: http://holder-service:9005
+      USE_REMOTE_KMS: "true"
+      REMOTE_KMS_URL: http://kms-service:4001
+      USE_REMOTE_STORAGE: "true"
+      REMOTE_STORAGE_URL: http://storage-service:4002
+      DID_SERVICE_URL: http://did-service:4003
+    depends_on:
+      kms-service:
+        condition: service_healthy
+      storage-service:
+        condition: service_healthy
+      did-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  verifier-service:
+    build: ./verifier-service
+    ports:
+      - "9004:9004"
+      - "9204:9204"
+    environment:
+      PORT: 9004
+      DIDCOMM_PORT: 9204
+      SERVICE_HOST: verifier-service
+      DIDCOMM_ENDPOINT: http://verifier-service:9004
+      USE_REMOTE_KMS: "true"
+      REMOTE_KMS_URL: http://kms-service:4001
+      USE_REMOTE_STORAGE: "true"
+      REMOTE_STORAGE_URL: http://storage-service:4002
+      DID_SERVICE_URL: http://did-service:4003
+    depends_on:
+      kms-service:
+        condition: service_healthy
+      storage-service:
+        condition: service_healthy
+      did-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  kms-data:
+  storage-data:
+  did-data:

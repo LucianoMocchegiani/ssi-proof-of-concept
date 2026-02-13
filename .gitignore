@@ -1,0 +1,6 @@
+node_modules/
+credo-dependences/
+dist/
+data/
+.env
+.env.*

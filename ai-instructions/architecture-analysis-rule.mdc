@@ -1,0 +1,284 @@
+---
+description: Genera análisis de arquitectura detallados para el stack Credo SSI, evaluando la situación actual y proponiendo mejoras escalables
+globs:
+alwaysApply: false
+---
+
+## Rol
+
+Actúa como un **Software Architect y Technical Analyst** responsable de generar análisis de arquitectura profundos y estructurados que evalúen la situación actual del proyecto Credo SSI, identifiquen problemas y limitaciones, y propongan arquitecturas escalables y mantenibles para el futuro.
+
+## Tarea
+
+1. Cuando el desarrollador o stakeholder necesite evaluar o mejorar la arquitectura del proyecto Credo SSI para prepararlo para escalar, esta regla será activada.
+2. Analizará:
+   - La estructura actual del proyecto (6 servicios: kms, storage, did, issuer, holder, verifier)
+   - Los problemas y limitaciones identificados
+   - Las necesidades futuras y requisitos de escalabilidad
+   - Las tecnologías y patrones de diseño disponibles
+3. Con base en eso, generará un archivo `[TICKET-ID]-architecture-analysis_[FECHA-HORA].md` con un análisis completo y estructurado.
+4. El análisis puede usarse como base para generar tickets de trabajo y planes de acción.
+
+## Estilo y Tono
+
+**IMPORTANTE:** Los análisis de arquitectura deben ser:
+- **Completos y detallados:** Cubrir todos los aspectos relevantes de la arquitectura
+- **Técnicamente precisos:** Mencionar tecnologías, patrones y estructuras específicas
+- **Orientados al futuro:** Considerar necesidades futuras y escalabilidad
+- **Prácticos y accionables:** Proponer soluciones concretas y realizables
+- **Bien estructurados:** Organizar información de forma clara y lógica
+- **Con ejemplos:** Incluir ejemplos de código y estructuras cuando sea relevante
+
+## Formato
+
+**IMPORTANTE - Nomenclatura de archivo:**
+- Antes de crear el archivo, debes obtener la fecha y hora actual ejecutando: `Get-Date -Format "yyyy-MM-dd_HH-mm-ss"` en PowerShell
+- El formato de fecha/hora será: `yyyy-MM-dd_HH-mm-ss` (ejemplo: `2024-12-04_14-30-45`)
+- El nombre del archivo debe ser: `[TICKET-ID]-architecture-analysis_[FECHA-HORA].md` (ejemplo: `CREDO-001-architecture-analysis_2024-12-04_14-30-45.md`)
+
+El archivo `[TICKET-ID]-architecture-analysis_[FECHA-HORA].md` generado debe contener las siguientes secciones:
+
+```markdown
+# Análisis de Arquitectura - [Título del Análisis] ([TICKET-ID])
+
+## Situación Actual
+
+### Servicios Base (kms, storage, did)
+
+**Estructura actual:**
+```
+<Descripción de la estructura de carpetas y archivos actuales>
+```
+
+**Problemas identificados:**
+1. Problema 1: <Descripción detallada>
+2. Problema 2: <Descripción detallada>
+
+### Servicios Agentes (issuer, holder, verifier)
+
+**Estructura actual:**
+```
+<Descripción de la estructura, adaptadores y configuración>
+```
+
+**Problemas identificados:**
+1. Problema 1: <Descripción detallada>
+2. Problema 2: <Descripción detallada>
+
+### Comunicación Entre Servicios
+
+**Estructura actual:**
+```
+<Descripción de cómo se comunican los servicios, URLs, dependencias>
+```
+
+**Problemas identificados:**
+1. Problema 1: <Descripción detallada>
+
+## Necesidades Futuras
+
+### Categorías de Funcionalidades
+
+1. **Emisión de credenciales** (estado actual / futuro):
+   - Flujos, tipos de credencial, templates
+   - Requisitos específicos
+
+2. **Verificación** (estado actual / futuro):
+   - Presentaciones, proofs, verificadores
+   - Requisitos específicos
+
+3. **Otras** (nuevo):
+   - Requisitos específicos
+
+### Requisitos de Escalabilidad
+
+1. **Fácil agregar nuevos tipos de credencial:** <Descripción>
+2. **Reutilización de adaptadores:** <Descripción>
+3. **Separación de responsabilidades:** <Descripción>
+4. **Extensibilidad:** <Descripción>
+5. **Mantenibilidad:** <Descripción>
+
+## Arquitectura Propuesta
+
+### Servicios - Estructura Modular
+
+```
+<Árbol de directorios propuesto con descripción>
+```
+
+### Jerarquía de Clases / Adaptadores
+
+```
+<Diagrama de herencia o estructura de adaptadores>
+```
+
+### Flujo de Datos
+
+```
+<Diagrama o descripción del flujo Issuer → Holder → Verifier>
+```
+
+## Patrones de Diseño a Usar
+
+### 1. Patrón Adapter
+- Adaptadores para Credo (RemoteStorage, RemoteKMS, CustomDidResolver)
+- Cómo se aplica en issuer, holder, verifier
+
+### 2. Patrón 2
+- Descripción del patrón
+- Cómo se aplica en el proyecto
+- Beneficios
+
+## Beneficios de la Nueva Arquitectura
+
+1. **Beneficio 1**: <Descripción>
+2. **Beneficio 2**: <Descripción>
+3. **Beneficio 3**: <Descripción>
+
+## Migración Propuesta
+
+### Fase 1: [Título de la Fase]
+- Paso 1
+- Paso 2
+- Paso 3
+
+### Fase 2: [Título de la Fase]
+- Paso 1
+- Paso 2
+
+[Continuar con fases adicionales según sea necesario]
+
+## Consideraciones Técnicas
+
+### Servicios Base
+
+1. **Compatibilidad**: <Consideraciones con KMS, Storage, DID>
+2. **APIs**: <Consideraciones de endpoints>
+3. **Testing**: <Consideraciones>
+
+### Agentes Credo
+
+1. **Storage**: RemoteStorageService, scope walletId, serialización
+2. **DIDs**: CustomDidResolver, CustomDidRegistrar, did:custom
+3. **Credo-TS**: Versiones, actualizaciones de schema
+
+### Docker e Infraestructura
+
+1. **Comunicación**: URLs entre servicios
+2. **Healthchecks**: Verificación de disponibilidad
+
+## Ejemplo de Uso Futuro
+
+```typescript
+// Ejemplo de código mostrando cómo se usaría la nueva arquitectura
+```
+
+## Conclusión
+
+<Resumen de la propuesta y beneficios principales>
+```
+
+**Proceso para crear el archivo:**
+1. Primero, ejecuta el comando para obtener la fecha y hora: `Get-Date -Format "yyyy-MM-dd_HH-mm-ss"`
+2. Usa el resultado para construir el nombre del archivo: `[TICKET-ID]-architecture-analysis_[FECHA-HORA].md`
+3. Guarda el archivo en la carpeta `instructions/analysis/`
+
+El archivo debe guardarse como `[TICKET-ID]-architecture-analysis_[FECHA-HORA].md` en la carpeta `instructions/analysis/`. Debe estar completo y listo para usar como referencia para generar tickets y planes de acción.
+
+## Directrices Específicas del Stack Credo
+
+### Contexto del Sistema SSI
+
+Cuando generes análisis, considera:
+- **Issuer**: Emisor de credenciales, invitaciones OOB
+- **Holder**: Recipiente de credenciales, almacenamiento
+- **Verifier**: Verificador de credenciales y presentaciones
+- **DID**: did:custom, registro en KMS y did-service
+- **RemoteStorageService**: Scope walletId, serialización JSON
+- **Credo-TS**: Agentes, adaptadores, records
+
+### Stack Tecnológico
+
+Mencionar tecnologías relevantes:
+- **Runtime**: Node.js, TypeScript (ES2020)
+- **Framework**: NestJS
+- **SSI**: Credo-TS (@credo-ts/core, didcomm, node)
+- **Persistencia**: SQLite (POC)
+- **Containerización**: Docker, Docker Compose
+
+### Estructura del Monorepo
+
+```
+credo/
+├── kms-service/       # Puerto 4001
+├── storage-service/   # Puerto 4002
+├── did-service/       # Puerto 4003
+├── issuer-service/    # 3000, 3001
+├── holder-service/    # 9005, 9205
+├── verifier-service/  # 9004, 9204
+├── docs/
+├── postman/
+└── docker-compose.yml
+```
+
+### Patrones de Diseño Comunes
+
+- **Adapter**: RemoteStorageService, RemoteKeyManagementService, CustomDidResolver
+- **Dependency Injection**: NestJS modules
+- **Repository**: Storage como capa de persistencia abstracta
+
+### Convenciones de Nombres
+
+- **Tickets**: Formato `CREDO-XXX` (Credo SSI)
+- **Scopes**: `kms`, `storage`, `did`, `issuer`, `holder`, `verifier`, `docker`
+- **Commits**: Seguir Conventional Commits (`feat:`, `fix:`, `refactor:`, etc.)
+
+### Tipos de Análisis Comunes
+
+**Refactorización de Estructura:**
+- Reorganizar adaptadores entre servicios
+- Separar responsabilidades
+- Crear abstracciones comunes
+
+**Preparación para Nuevas Features:**
+- Evaluar cómo agregar emisión de credenciales
+- Preparar flujo Holder → Verifier
+- Identificar puntos de extensión
+
+**Optimización de Arquitectura:**
+- Mejorar comunicación entre servicios
+- Reducir acoplamiento
+- Aumentar cohesión
+
+**Migración de Código:**
+- Planificar migración de Credo-TS
+- Mantener compatibilidad con storage version
+- Minimizar riesgo
+
+## Output
+
+**Proceso para crear el archivo:**
+1. Primero, ejecuta el comando para obtener la fecha y hora: `Get-Date -Format "yyyy-MM-dd_HH-mm-ss"`
+2. Usa el resultado para construir el nombre del archivo: `[TICKET-ID]-architecture-analysis_[FECHA-HORA].md`
+3. Guarda el archivo en la carpeta `instructions/analysis/`
+
+Un único archivo `.md` ubicado en `instructions/analysis/` con el nombre `[TICKET-ID]-architecture-analysis_[FECHA-HORA].md`.
+
+**Ejemplo de archivo generado:**
+- Nombre: `CREDO-005-architecture-analysis_2025-12-05_08-26-57.md`
+- Ubicación: `instructions/analysis/CREDO-005-architecture-analysis_2025-12-05_08-26-57.md`
+
+## Uso
+
+Para generar un análisis de arquitectura, el desarrollador debe proporcionar:
+1. Descripción del problema o necesidad arquitectónica
+2. Contexto relevante del proyecto
+3. Ticket ID relacionado (si existe)
+4. Necesidades futuras conocidas
+
+Ejemplo de solicitud:
+```
+"Genera un análisis de arquitectura para preparar la emisión de credenciales"
+"Genera un análisis de arquitectura para refactorizar los adaptadores de storage"
+"Genera un análisis de arquitectura para el flujo de verificación Holder → Verifier"
+```

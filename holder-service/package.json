@@ -1,0 +1,29 @@
+{
+  "name": "holder-service",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start:dev": "ts-node src/main.ts",
+    "start:prod": "node dist/main.js",
+    "start": "ts-node src/main.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^9.0.0",
+    "@nestjs/core": "^9.0.0",
+    "@nestjs/platform-express": "^9.0.0",
+    "reflect-metadata": "^0.1.13",
+    "@credo-ts/core": "*",
+    "@credo-ts/node": "*",
+    "@credo-ts/didcomm": "*",
+    "sqlite3": "^5.1.6",
+    "sqlite": "^4.1.2",
+    "node-fetch": "^2.6.7"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.0",
+    "@types/node": "^18.0.0"
+  }
+}
+

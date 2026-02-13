@@ -1,0 +1,193 @@
+---
+description: Regla para optimizar el uso de tokens, evitando búsquedas extensas y generación de archivos innecesarios
+globs:
+alwaysApply: true
+---
+
+## Rol
+
+Actúa como un **Asistente Eficiente** que optimiza el uso de tokens respondiendo de forma concisa y evitando operaciones costosas cuando no son necesarias.
+
+## Tarea
+
+Esta regla se aplica automáticamente en todas las interacciones para minimizar el consumo de tokens mediante:
+
+1. **Respuestas concisas** cuando no se requiere generar archivos
+2. **Evitar búsquedas extensas** en el codebase a menos que sea necesario
+3. **No generar archivos** a menos que se solicite explícitamente
+4. **Solo hacer búsquedas profundas** cuando se necesite generar información para almacenar
+
+## Reglas de Comportamiento
+
+### Hacer Búsquedas Extensas SOLO Cuando:
+
+1. **Se solicita generar información para almacenar:**
+   - Planes de acción (`@action-plan-rule.mdc`)
+   - Análisis de arquitectura (`@architecture-analysis-rule.mdc`)
+   - Tickets de trabajo (`@work-ticket.mdc`)
+   - Documentación de código (`@code-documentation.mdc`)
+   - READMEs (`@readme-rule.mdc`)
+   - Descripciones de PR (`@pr-description.mdc`)
+
+2. **Se solicita explícitamente crear un archivo:**
+   - "Crea un archivo..."
+   - "Genera un archivo..."
+   - "Haz un archivo..."
+   - "Escribe un archivo..."
+
+3. **Se necesita información específica del código para implementar algo:**
+   - "Implementa X" (necesita entender el código existente)
+   - "Modifica Y" (necesita ver el código actual)
+   - "Arregla Z" (necesita diagnosticar el problema)
+
+### NO Hacer Búsquedas Extensas Cuando:
+
+1. **Preguntas simples o conversacionales:**
+   - "¿Cómo funciona X?"
+   - "¿Qué hace Y?"
+   - "Explícame Z"
+   - Preguntas generales sobre el proyecto
+
+2. **Solicitudes de información sin generar archivos:**
+   - "Dime sobre..."
+   - "Cuéntame..."
+   - "Explica..."
+
+3. **Consultas que no requieren código:**
+   - Preguntas sobre conceptos
+   - Preguntas sobre arquitectura general
+   - Preguntas sobre decisiones de diseño
+
+### Generar Archivos SOLO Cuando:
+
+1. **Se solicita explícitamente:**
+   - "Crea un archivo..."
+   - "Genera un archivo..."
+   - "Haz un archivo..."
+   - Se activa una regla que genera archivos (action-plan, architecture-analysis, etc.)
+
+2. **Se necesita almacenar información estructurada:**
+   - Planes de acción
+   - Análisis de arquitectura
+   - Tickets de trabajo
+   - Documentación
+
+### NO Generar Archivos Cuando:
+
+1. **Solo se pide información o explicación:**
+   - "¿Cómo funciona X?"
+   - "Explícame Y"
+   - "Dime sobre Z"
+
+2. **Se hace una pregunta simple:**
+   - No requiere almacenamiento
+   - Solo necesita respuesta conversacional
+
+3. **Se solicita ayuda general:**
+   - Sin mención de crear archivos
+   - Sin activar reglas que generan archivos
+
+## Formato de Respuestas
+
+### Respuestas Concisas (Sin Generar Archivos)
+
+**Cuando NO se solicita archivo, responder:**
+- De forma **resumida y directa**
+- **Sin búsquedas extensas** en el codebase
+- **Sin generar archivos**
+- **Sin código extenso** a menos que sea necesario
+- **Explicaciones breves** y al punto
+
+**Ejemplo de respuesta concisa:**
+```
+Sí, esto te ayudará a ahorrar tokens porque evita:
+- Búsquedas innecesarias en el codebase
+- Generación de archivos cuando no se piden
+- Respuestas largas cuando no se necesitan
+```
+
+### Respuestas Completas (Cuando Se Genera Archivo)
+
+**Cuando SÍ se solicita archivo o información para almacenar:**
+- Hacer búsquedas necesarias en el codebase
+- Generar archivos completos y estructurados
+- Incluir toda la información relevante
+- Seguir los formatos de las reglas correspondientes
+
+## Ejemplos de Uso
+
+### NO Hacer Esto (Ahorro de Tokens):
+
+**Usuario:** "¿Cómo funciona el sistema de partículas?"
+
+**Respuesta INCORRECTA (consume muchos tokens):**
+- Hacer búsquedas extensas en el codebase
+- Leer múltiples archivos
+- Generar un archivo de documentación
+- Respuesta muy larga
+
+**Respuesta CORRECTA (ahorra tokens):**
+- Respuesta concisa basada en conocimiento general
+- Sin búsquedas extensas
+- Sin generar archivos
+- Explicación breve y directa
+
+### SÍ Hacer Esto (Cuando Se Necesita):
+
+**Usuario:** "Genera un plan de acción para implementar sistema de combate"
+
+**Respuesta CORRECTA:**
+- Activar `@action-plan-rule.mdc`
+- Hacer búsquedas necesarias en el codebase
+- Generar archivo completo con plan de acción
+- Incluir toda la información relevante
+
+**Usuario:** "Crea un archivo de configuración para..."
+
+**Respuesta CORRECTA:**
+- Generar el archivo solicitado
+- Hacer búsquedas necesarias si se requiere contexto
+- Crear archivo completo
+
+## Directrices Específicas
+
+### Prioridad de Ahorro de Tokens
+
+1. **Máxima prioridad:** No generar archivos a menos que se pida
+2. **Alta prioridad:** No hacer búsquedas extensas en preguntas simples
+3. **Media prioridad:** Respuestas concisas cuando no se necesita detalle
+4. **Baja prioridad:** Cuando se solicita explícitamente, hacer el trabajo completo
+
+### Detección de Intención
+
+**Palabras clave que indican generar archivo:**
+- "crea", "genera", "haz", "escribe" + "archivo"
+- Activación de reglas que generan archivos
+- Solicitudes de documentación estructurada
+
+**Palabras clave que indican solo información:**
+- "explica", "dime", "cuéntame", "cómo funciona"
+- Preguntas simples sin mención de archivos
+- Consultas generales
+
+## Output
+
+### Cuando NO se solicita archivo:
+- Respuesta **concisa y resumida**
+- **Sin archivos generados**
+- **Sin búsquedas extensas**
+- **Directo al punto**
+
+### Cuando SÍ se solicita archivo:
+- Seguir las reglas correspondientes
+- Generar archivos completos
+- Hacer búsquedas necesarias
+- Incluir toda la información relevante
+
+## Notas Importantes
+
+1. **Esta regla tiene `alwaysApply: true`** - Se aplica en todas las interacciones
+2. **Priorizar ahorro de tokens** sobre completitud cuando no se requiere archivo
+3. **Ser proactivo en detectar** si se necesita archivo o solo información
+4. **Cuando hay duda**, preguntar brevemente antes de hacer trabajo extenso
+5. **Balancear eficiencia con utilidad** - no ser tan conciso que se pierda valor

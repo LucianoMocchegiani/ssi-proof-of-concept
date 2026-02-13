@@ -1,0 +1,294 @@
+---
+description: Genera un plan de acción paso a paso para una feature o bug, siguiendo la arquitectura del stack Credo SSI
+globs:
+alwaysApply: false
+---
+
+## Rol
+
+Eres un senior software engineer con amplia experiencia en resolución de problemas, desarrollo de código y diseño arquitectónico. Tienes experiencia en patrones de diseño y estrategias de implementación eficientes, especialmente en:
+- TypeScript, NestJS
+- Credo-TS (@credo-ts/core, didcomm, node)
+- Node.js, SQLite
+- Docker, Docker Compose
+- Arquitecturas SSI (Self-Sovereign Identity)
+
+## Tarea
+
+Basándote en un ticket, issue o requerimiento, genera un plan de acción detallado que guíe al desarrollador a través de la implementación paso a paso del bugfix o feature. El objetivo es fomentar que los desarrolladores sigan un enfoque estructurado interactuando con la IA de forma incremental, en lugar de pedirle a la IA que resuelva toda la tarea desde la descripción inicial.
+
+**IMPORTANTE:** Cada plan de acción debe incluir como último paso la generación de la descripción del Pull Request usando `@pr-description.mdc`.
+
+## Formato
+
+**IMPORTANTE - Nomenclatura de archivo:**
+- Antes de crear el archivo, debes obtener la fecha y hora actual ejecutando: `Get-Date -Format "yyyy-MM-dd_HH-mm-ss"` en PowerShell
+- El formato de fecha/hora será: `yyyy-MM-dd_HH-mm-ss` (ejemplo: `2024-12-04_14-30-45`)
+- El nombre del archivo debe ser: `[TICKET-ID]-action-plan_[FECHA-HORA].md` (ejemplo: `CREDO-001-action-plan_2024-12-04_14-30-45.md`)
+
+Genera un archivo Markdown llamado `[TICKET-ID]-action-plan_[FECHA-HORA].md` con las siguientes secciones:
+
+```markdown
+# [TICKET-ID] - [Título de la Tarea]
+
+## Descripción de la Tarea
+<Descripción clara del problema o feature a implementar>
+
+**Comportamiento actual:**
+<Cómo funciona el sistema actualmente>
+
+**Comportamiento esperado:**
+<Cómo debería funcionar después de la implementación>
+
+## Criterios de Aceptación
+
+1. ✅/❌ Criterio 1
+2. ✅/❌ Criterio 2
+3. ✅/❌ Criterio 3
+
+## Contexto del Proyecto
+
+### Servicio(s) Afectado(s)
+- [ ] kms-service
+- [ ] storage-service
+- [ ] did-service
+- [ ] issuer-service
+- [ ] holder-service
+- [ ] verifier-service
+- [ ] Docker/Infraestructura
+
+### Tecnologías Involucradas
+- Runtime: Node.js, TypeScript (ES2020)
+- Framework: NestJS
+- SSI: Credo-TS (@credo-ts/core, didcomm, node)
+- Persistencia: SQLite
+- Containerización: Docker + Docker Compose
+
+## Pasos de Implementación
+
+### Paso 1: [Título del Paso]
+
+**Descripción:**
+<Descripción detallada de qué se debe hacer en este paso>
+
+**Archivos a modificar/crear:**
+- `ruta/al/archivo.ts`
+- `ruta/al/otro/archivo.ts`
+- `docs/README.md` (si se crea/modifica documentación)
+
+**Detalles de implementación:**
+```typescript
+// Ejemplo de código o pseudocódigo
+```
+
+**Notas:**
+- Nota importante 1
+- Nota importante 2
+- **⚠️ Documentación:** Si se crea o modifica un módulo significativo, actualizar docs/ o README del servicio. Verificar AGENTS.md y ai-instructions si aplica.
+
+**Recursos útiles:**
+- Link a documentación relevante (si aplica)
+
+---
+
+### Paso 2: [Título del Paso]
+...
+
+[Repetir para cada paso necesario]
+
+---
+
+### Paso Final: Generar Descripción del Pull Request
+
+**Descripción:**
+Una vez completados todos los pasos anteriores y verificada la implementación, genera la descripción completa del Pull Request usando la regla `@pr-description.mdc`.
+
+**Comando a ejecutar:**
+```
+@pr-description.mdc
+```
+
+**Resultado esperado:**
+- Archivo generado: `[TICKET-ID]_pr-description_[FECHA-HORA].md` en `instructions/prs/` (con fecha y hora obtenida de `Get-Date -Format "yyyy-MM-dd_HH-mm-ss"`)
+- El archivo contendrá una descripción completa del PR lista para copiar y pegar en Git
+- Incluirá: título, resumen, motivación, cambios técnicos, testing, referencias y riesgos
+
+**Notas:**
+- Este paso se ejecuta DESPUÉS de completar toda la implementación
+- La descripción se genera automáticamente basándose en los cambios realizados
+- El desarrollador solo necesita copiar y pegar el contenido en Git
+- No editar manualmente a menos que sea estrictamente necesario
+
+---
+
+## Consideraciones Técnicas
+
+### Performance
+<Consideraciones de rendimiento si aplican>
+- Consultas optimizadas a storage-service
+- Uso adecuado de conexiones HTTP entre servicios
+
+### Seguridad
+<Consideraciones de seguridad si aplican>
+- Validación de entrada con class-validator
+- Manejo seguro de claves en KMS
+- Sanitización de datos en storage
+
+### Casos Edge
+<Casos edge a considerar>
+- Conexión DIDComm fallida
+- Credenciales inválidas o expiradas
+- DIDs no resueltos
+
+### Compatibilidad
+<Consideraciones de compatibilidad con otros servicios o versiones>
+- Compatibilidad con versiones de Credo-TS
+- autoUpdateStorageOnStartup para migraciones de storage
+- Scope walletId en RemoteStorageService
+
+## Patrones de Código a Usar
+
+- **NestJS (servicios base):**
+  - Módulos por dominio
+  - Controllers con DTOs y class-validator
+  - Servicios inyectables
+  - Manejo de errores con HttpException
+
+- **Agentes Credo (issuer, holder, verifier):**
+  - Adaptadores con sufijo `.adapter.ts`
+  - RemoteStorageService con scope walletId
+  - JsonTransformer.fromJSON / record.toJSON para serialización
+  - CustomDidResolver y CustomDidRegistrar para did:custom
+
+- **Storage:**
+  - getById devuelve null en 404 (no lanzar error)
+  - Tipo de registro: `walletId::RecordType`
+
+- **DIDs:**
+  - did:custom registrado en KMS y did-service
+
+## Dependencias
+
+### Nuevas Dependencias (si aplica)
+```json
+"@credo-ts/paquete": "^x.x.x"
+```
+
+### Variables de Entorno (si aplica)
+- `USE_REMOTE_KMS`: true para usar kms-service
+- `USE_REMOTE_STORAGE`: true para usar storage-service
+- `KMS_SERVICE_URL`, `STORAGE_SERVICE_URL`, `DID_SERVICE_URL`: URLs de servicios
+
+## Archivos Principales Involucrados
+
+1. `servicio/src/ruta/archivo1.ts` - Propósito
+2. `servicio/src/ruta/archivo2.ts` - Propósito
+
+## Testing
+
+### Tests a Crear/Modificar
+- Unit tests: `servicio/src/ruta/archivo.spec.ts`
+- Integration tests: `servicio/test/` (si aplica)
+
+### Escenarios de Prueba
+1. Escenario 1: Descripción
+2. Escenario 2: Descripción
+
+## Deployment
+
+### Orden de Deployment
+1. Rebuild Docker images: `docker-compose build [servicio]`
+2. Restart servicios: `docker-compose up -d [servicio]`
+3. Verificar healthchecks: curl a /health de cada servicio
+
+### Verificación Post-Deployment
+- [ ] Verificar endpoints con curl/Postman
+- [ ] Verificar logs de Docker
+- [ ] Verificar flujo Issuer → Holder (invitación, conexión)
+
+---
+
+**Nota Final:** Este plan debe ejecutarse paso a paso, verificando cada paso antes de continuar con el siguiente. Si encuentras problemas o necesitas clarificación, consulta con el equipo antes de proceder.
+
+**⚠️ IMPORTANTE:** El último paso del plan SIEMPRE debe ser "Generar Descripción del Pull Request" usando `@pr-description.mdc`.
+```
+
+❗ **No incluyas pasos relacionados con testing manual extensivo o QA.** El testing se maneja por separado.
+
+Si se necesita clarificación para mejorar el plan de acción, haz preguntas de seguimiento al desarrollador, pero **no incluyas esas preguntas en el archivo Markdown generado**.
+
+## Directrices Específicas del Stack Credo
+
+### Estructura del Monorepo
+
+```
+credo/
+├── kms-service/       # Puerto 4001 - Gestión de claves
+├── storage-service/   # Puerto 4002 - CRUD de registros
+├── did-service/       # Puerto 4003 - DIDs did:custom
+├── issuer-service/    # 3000, 3001 - Agente emisor
+├── holder-service/    # 9005, 9205 - Agente holder
+├── verifier-service/  # 9004, 9204 - Agente verificador
+├── docs/              # Documentación
+├── postman/           # Colecciones Postman
+└── docker-compose.yml
+```
+
+### Estructura por Servicio (NestJS + Credo)
+
+```
+servicio/
+├── src/
+│   ├── main.ts
+│   ├── app.module.ts
+│   ├── config/          # env.config.ts
+│   ├── storage/         # remote-storage.adapter.ts (en agentes)
+│   ├── did/             # custom-did-*.adapter.ts (en agentes)
+│   ├── kms/             # remote-kms.adapter.ts (en agentes)
+│   └── agent/           # agent config y storage (en agentes)
+├── package.json
+└── Dockerfile
+```
+
+### Naming Conventions
+- Funciones: camelCase (`getRecordById`)
+- Clases: PascalCase (`RemoteStorageService`)
+- Variables: camelCase (`walletId`)
+- Constantes: UPPER_SNAKE_CASE (`STORAGE_SERVICE_URL`)
+- Archivos TypeScript: kebab-case (`remote-storage.adapter.ts`)
+- Adaptadores: sufijo `.adapter.ts`
+
+### Best Practices
+- TypeScript strict mode
+- JSDoc en funciones y clases exportadas
+- async/await para operaciones I/O
+- Manejo de errores apropiado
+- Logging estructurado
+- Validación con class-validator
+- RemoteStorage: toJSON en save/update, fromJSON en get
+
+### Conceptos SSI
+- **Issuer**: Emite credenciales verificables
+- **Holder**: Recibe y almacena credenciales
+- **Verifier**: Verifica credenciales y presentaciones
+- **DID**: Identificador descentralizado (did:custom)
+- **Invitación OOB**: Flujo de conexión DIDComm
+- **Credencial**: Afirmación verificable sobre un sujeto
+
+### Variables de Entorno Comunes
+- `USE_REMOTE_KMS`, `USE_REMOTE_STORAGE`: activar servicios remotos
+- `KMS_SERVICE_URL`, `STORAGE_SERVICE_URL`, `DID_SERVICE_URL`: URLs internas (ej. http://kms-service:4001)
+- `PORT`: Puerto del servicio
+
+## Output
+
+**Proceso para crear el archivo:**
+1. Primero, ejecuta el comando para obtener la fecha y hora: `Get-Date -Format "yyyy-MM-dd_HH-mm-ss"`
+2. Usa el resultado para construir el nombre del archivo: `[TICKET-ID]-action-plan_[FECHA-HORA].md`
+3. Guarda el archivo en la carpeta `instructions/tasks/`
+
+Un único archivo `.md` ubicado en `instructions/tasks/` con el nombre `[TICKET-ID]-action-plan_[FECHA-HORA].md` donde `[FECHA-HORA]` es el resultado del comando `Get-Date -Format "yyyy-MM-dd_HH-mm-ss"` (formato: `yyyy-MM-dd_HH-mm-ss`).
+
+**Ejemplo de archivo generado:**
+- Nombre: `CREDO-001-action-plan_2024-12-04_14-30-45.md`
+- Ubicación: `instructions/tasks/CREDO-001-action-plan_2024-12-04_14-30-45.md`
