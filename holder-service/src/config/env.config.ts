@@ -12,7 +12,8 @@ export const envConfig = {
   kmsMode: (env.KMS_MODE || 'internal') as 'internal' | 'external',
   externalKmsUrl: env.EXTERNAL_KMS_URL || 'http://localhost:4001',
   internalKmsSqlitePath: env.INTERNAL_KMS_SQLITE_PATH || '/app/data/internal-kms.sqlite',
-  useRemoteStorage: env.USE_REMOTE_STORAGE === 'true',
-  remoteStorageUrl: env.REMOTE_STORAGE_URL || 'http://localhost:4002',
+  walletMode: (env.WALLET_MODE || 'internal') as 'internal' | 'external',
+  externalWalletUrl: env.EXTERNAL_WALLET_URL || 'http://localhost:4002',
+  internalWalletSqlitePath: env.INTERNAL_WALLET_SQLITE_PATH || '/app/data/internal-wallet.sqlite',
   vdrServiceUrl: env.VDR_SERVICE_URL || 'http://localhost:4003',
 }

@@ -2,7 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, NotFoundException } fr
 import { StorageService } from './storage.service'
 
 /**
- * Controller de almacenamiento genérico.
+ * Controller del wallet-service.
  *
  * CRUD de registros por (type, id). Los agentes Credo usan scope
  * walletId::RecordType (ej. issuer-wallet::ConnectionRecord).

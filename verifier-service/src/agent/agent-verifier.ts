@@ -21,7 +21,7 @@ import {
 import type { DidCommProofExchangeRecord } from '@credo-ts/didcomm'
 import { envConfig } from '../config'
 import { verifierAgentConfig } from './agent-verifier.config'
-import { registerStorageAdapter } from './agent-verifier-storage'
+import { registerWalletAdapter } from './agent-verifier-wallet'
 import { buildKeyManagementModule, registerKmsConfig } from './agent-verifier-kms'
 import { buildDidsModule } from './agent-verifier-dids'
 import { DidCommWsOutboundTransportDelayedClose } from '../transport/ws-outbound-delayed-close.transport'
@@ -33,7 +33,7 @@ import { DidCommWsOutboundTransportDelayedClose } from '../transport/ws-outbound
 export const initializeVerifierAgent = async (wsServer?: any) => {
   const dependencyManager = new DependencyManager()
 
-  registerStorageAdapter(dependencyManager)
+  registerWalletAdapter(dependencyManager)
   dependencyManager.registerInstance(
     DidCommModuleConfig,
     new DidCommModuleConfig({ endpoints: [envConfig.didcommEndpoint] })

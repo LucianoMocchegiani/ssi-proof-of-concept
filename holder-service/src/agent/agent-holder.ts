@@ -25,7 +25,7 @@ import {
 import type { DidCommCredentialExchangeRecord, DidCommProofExchangeRecord } from '@credo-ts/didcomm'
 import { envConfig } from '../config'
 import { holderAgentConfig } from './agent-holder.config'
-import { registerStorageAdapter } from './agent-holder-storage'
+import { registerWalletAdapter } from './agent-holder-wallet'
 import { buildKeyManagementModule, registerKmsConfig } from './agent-holder-kms'
 import { buildDidsModule } from './agent-holder-dids'
 import { DidCommWsOutboundTransportDelayedClose } from '../transport/ws-outbound-delayed-close.transport'
@@ -37,7 +37,7 @@ import { DidCommWsOutboundTransportDelayedClose } from '../transport/ws-outbound
 export const initializeHolderAgent = async (wsServer?: any) => {
   const dependencyManager = new DependencyManager()
 
-  registerStorageAdapter(dependencyManager)
+  registerWalletAdapter(dependencyManager)
   dependencyManager.registerInstance(
     DidCommModuleConfig,
     new DidCommModuleConfig({ endpoints: [envConfig.didcommEndpoint] })

@@ -32,11 +32,11 @@ Primero se crean la clave privada y la clave publica en el KMS. Despues se gener
            | 3. didRepository.save()
            v
   +-----------------+
-  | storage-service |   POST /records  ->  guarda DidRecord
+  | wallet-service  |   POST /records  ->  guarda DidRecord
   +-----------------+
 ```
 
-Resumen: KMS (claves privada/publica) -> DID (identificador + documento) -> Storage (DidRecord local).
+Resumen: KMS (claves privada/publica) -> DID (identificador + documento) -> Wallet (DidRecord local).
 
 ---
 
@@ -57,7 +57,7 @@ El issuer genera una URL OOB que incluye su did:custom:
        | 1. Busca DidRecord del issuer
        v
   +-----------------+
-  | storage-service |   POST /records/query  (DidRecord, role=created)
+  | wallet-service  |   POST /records/query  (DidRecord, role=created)
   +--------+--------+
            | DidRecord con didDocument
            v
@@ -66,14 +66,14 @@ El issuer genera una URL OOB que incluye su did:custom:
        | 2. Guarda OutOfBandRecord
        v
   +-----------------+
-  | storage-service |   POST /records  ->  OutOfBandRecord
+  | wallet-service  |   POST /records  ->  OutOfBandRecord
   +-----------------+
        |
        v
   [issuer-service]  devuelve invitation (URL didcomm://?oob=...)
 ```
 
-Servicios implicados: Storage (lectura DidRecord, escritura OutOfBandRecord).
+Servicios implicados: Wallet (lectura DidRecord, escritura OutOfBandRecord).
 
 ---
 
@@ -103,7 +103,7 @@ El holder recibe la URL, establece conexion DIDComm con el issuer:
        | 2. getCreatedDids({ did: ourDid })
        v
   +-----------------+
-  | storage-service |   POST /records/query  (DidRecord)
+  | wallet-service  |   POST /records/query  (DidRecord)
   +--------+--------+
            |
            v
@@ -113,12 +113,12 @@ El holder recibe la URL, establece conexion DIDComm con el issuer:
        | 3. Guarda OutOfBandRecord, actualiza ConnectionRecord
        v
   +-----------------+
-  | storage-service |   POST /records, PUT /records
+  | wallet-service  |   POST /records, PUT /records
   +-----------------+
        |
        v
   [issuer-service]  recibe mensaje DIDComm (puerto 3001)
-       |   Procesa request, usa Storage (guardar conexion). Firmar: Credo usa crypto interno (KMS remoto no implementa sign).
+       |   Procesa request, usa Wallet (guardar conexion). Firmar: Credo usa crypto interno (KMS remoto no implementa sign).
        |   Responde al holder
        v
   [holder-service]  recibe respuesta, actualiza conexion
@@ -126,8 +126,8 @@ El holder recibe la URL, establece conexion DIDComm con el issuer:
        | 4. Storage (ConnectionRecord)
        v
   +-----------------+
-  | storage-service |   PUT /records
+  | wallet-service  |   PUT /records
   +-----------------+
 ```
 
-Servicios implicados: DID (resolver issuer), Storage (DidRecord holder, OutOfBandRecord, ConnectionRecord). KMS: solo createKey/getPublicKey; firmar no implementado (Credo usa crypto interno).
+Servicios implicados: DID (resolver issuer), Wallet (DidRecord holder, OutOfBandRecord, ConnectionRecord). KMS: solo createKey/getPublicKey; firmar no implementado (Credo usa crypto interno).

@@ -133,7 +133,7 @@ Las claves permiten que el sistema sea **confidencial** (solo el destinatario le
 | **Verificar** | Si | verify() usa publicJwk local o delega a kms-service vía POST /verify |
 | **Cifrar/descifrar** DIDComm | Si | ChaCha20-Poly1305 + X25519 key agreement (anoncrypt/authcrypt) |
 
-El agente usa `RemoteKeyManagementService`, que traduce llamadas de Credo a HTTP hacia kms-service. Soporta todas las operaciones necesarias para el flujo completo: createKey, getPublicKey, sign, verify, encrypt y decrypt. La verificación con `publicJwk` (sin keyId) se hace localmente con `crypto.verify` de Node.js. `randomBytes` también se ejecuta localmente.
+El agente usa `InternalKeyManagementService` (KMS interno) o `ExternalKeyManagementService` (KMS externo) según la variable `KMS_MODE`. Ambos soportan todas las operaciones necesarias para el flujo completo: createKey, getPublicKey, sign, verify, encrypt y decrypt. La verificación con `publicJwk` (sin keyId) se hace localmente con `crypto.verify` de Node.js. `randomBytes` también se ejecuta localmente en ambos modos.
 
 ---
 
@@ -164,6 +164,8 @@ El agente usa `RemoteKeyManagementService`, que traduce llamadas de Credo a HTTP
 
 ## Almacenamiento con multiples agentes
 
+### Modo externo (`KMS_MODE: "external"`)
+
 Con 3 agentes (issuer, holder, verifier) todos usan el **mismo KMS** y la **misma base SQLite**:
 
 ```
@@ -186,6 +188,18 @@ kms.sqlite
 - Verifier igual
 
 Si se quisiera separacion explícita (por wallet/agente), habria que añadir columna `wallet_id` a la tabla o usar instancias separadas de KMS por agente.
+
+### Modo interno (`KMS_MODE: "internal"`)
+
+Cada agente tiene su **propio SQLite** aislado:
+
+```
+issuer-service/data/internal-kms.sqlite   → claves del issuer
+holder-service/data/internal-kms.sqlite   → claves del holder
+verifier-service/data/internal-kms.sqlite → claves del verifier
+```
+
+No hay base compartida. Las claves privadas nunca salen del proceso del agente.
 
 ---
 
@@ -224,11 +238,28 @@ Si se quisiera separacion explícita (por wallet/agente), habria que añadir col
 
 ---
 
-## Configuración: KMS interno vs remoto
+## Configuración: KMS interno vs externo
 
 | Variable | Valor | Efecto |
 |----------|-------|--------|
-| `USE_REMOTE_KMS: "false"` | KMS interno | Issuer, holder y verifier usan el **KMS interno** (MockKMS / in-memory de Credo). No dependen de kms-service. Claves se pierden al reiniciar. |
-| `USE_REMOTE_KMS: "true"` | **Actual** | Usan kms-service vía HTTP. Requiere que kms-service esté levantado. Claves persisten en SQLite. |
+| `KMS_MODE: "internal"` | KMS interno | Cripto local (Node.js `crypto`) + SQLite local por agente. Las claves privadas nunca salen del proceso. Ideal para holders / wallets personales. |
+| `KMS_MODE: "external"` | **Actual** | Delega cripto al kms-service vía HTTP. SQLite centralizado. Ideal para issuers y verifiers industriales (reemplazable por HSM/Cloud KMS en producción). |
+
+**Variables adicionales:**
+
+| Variable | Default | Descripcion |
+|----------|---------|-------------|
+| `EXTERNAL_KMS_URL` | `http://localhost:4001` | URL del kms-service (solo modo externo) |
+| `INTERNAL_KMS_SQLITE_PATH` | `/app/data/internal-kms.sqlite` | Ruta del SQLite local (solo modo interno) |
+
+**Diferencia clave:**
+
+| Aspecto | KMS interno | KMS externo |
+|---------|-------------|-------------|
+| Cripto | Local (Node.js `crypto`) | Delegada a kms-service |
+| Persistencia | SQLite local por agente | SQLite centralizado en kms-service |
+| Clave privada | Vive en el proceso del agente | Vive en el servicio externo |
+| Escalabilidad | Un SQLite por instancia | Múltiples agentes comparten un KMS |
+| Producción | Wallet móvil, TEE | HSM, AWS KMS, Azure Key Vault |
 
 El flujo completo (OOB, DIDComm, conexiones, emisión de credenciales, presentación de proofs) funciona con ambos modos.

@@ -1,11 +1,10 @@
 import { AgentContext, BaseRecordConstructor, JsonTransformer } from '@credo-ts/core'
 
 /**
- * Adaptador de almacenamiento remoto vía HTTP.
- * Implementa la interfaz de Credo StorageService delegando al storage-service.
+ * Wallet externo via HTTP: delega al wallet-service centralizado.
  * Scope por walletId para que cada agente (issuer, holder, verifier) tenga sus propios registros.
  */
-export class RemoteStorageService {
+export class ExternalWalletStorageService {
   constructor(
     private baseUrl: string,
     private walletId: string
@@ -27,7 +26,7 @@ export class RemoteStorageService {
   private async call(path: string, init?: RequestInit) {
     const url = `${this.baseUrl}${path}`
     const res = await fetch(url, init)
-    if (!res.ok) throw new Error(`RemoteStorage error ${res.status}`)
+    if (!res.ok) throw new Error(`ExternalWallet error ${res.status}`)
     return res.json()
   }
 
@@ -73,7 +72,6 @@ export class RemoteStorageService {
     }
   }
 
-  /** Asegura clone() en el registro (Credo Repository.update lo requiere). */
   private ensureRecordInstance<T>(instance: T | null, recordClass: BaseRecordConstructor<any>): T | null {
     if (!instance) return null
     if (typeof (instance as any).clone === 'function') return instance
@@ -82,14 +80,13 @@ export class RemoteStorageService {
 
   async getById(_ctx: AgentContext, recordClass: BaseRecordConstructor<any>, id: string) {
     const type = this.scopeType(recordClass.type)
-    // Siempre POST para evitar problemas con caracteres en URL (:, etc.)
     const res = await fetch(`${this.baseUrl}/records/get`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ type, id }),
     })
     if (res.status === 404) return null
-    if (!res.ok) throw new Error(`RemoteStorage error ${res.status}`)
+    if (!res.ok) throw new Error(`ExternalWallet error ${res.status}`)
     const data = await res.json()
     return this.ensureRecordInstance(JsonTransformer.fromJSON(data, recordClass), recordClass)
   }
@@ -102,7 +99,6 @@ export class RemoteStorageService {
     )
   }
 
-  /** Filtra por query: el storage-service retorna todos, filtramos aquí. */
   private filterByQuery(items: { id: string; data: any }[], query: any): { id: string; data: any }[] {
     if (!query || typeof query !== 'object') return items
     return items.filter((item) => {
@@ -122,7 +118,7 @@ export class RemoteStorageService {
         if (query.protocolName != null && msgType?.protocolName !== query.protocolName) return false
         if (query.protocolMajorVersion != null && String(msgType?.protocolMajorVersion) !== String(query.protocolMajorVersion)) return false
       }
-      if (query.threadId != null && query.threadId !== undefined) {
+      if (query.threadId != null) {
         const tid = d?.threadId ?? d?.outOfBandInvitation?.threadId ?? tags?.threadId
         if (tid !== query.threadId) return false
       }
@@ -136,7 +132,6 @@ export class RemoteStorageService {
         const routingFp = tags.recipientRoutingKeyFingerprint
         const orMatch = query.$or.some((sub: any) => {
           if (sub?.role !== undefined && d?.role !== sub.role) return false
-          // ConnectionRecord findByDids: cada clause exige did+theirDid, did+previousTheirDids, o previousDids+theirDid
           const isConnectionDidQuery =
             (sub?.did != null || Array.isArray(sub?.previousDids)) &&
             (sub?.theirDid != null || Array.isArray(sub?.previousTheirDids))

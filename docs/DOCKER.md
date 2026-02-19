@@ -19,7 +19,7 @@ docker compose logs -f
 | Servicio        | Puerto API | Puerto DIDComm | URL interna (entre contenedores)      |
 |-----------------|------------|----------------|---------------------------------------|
 | kms-service     | 4001       | -              | http://kms-service:4001               |
-| storage-service | 4002       | -              | http://storage-service:4002           |
+| wallet-service  | 4002       | -              | http://wallet-service:4002            |
 | vdr-service     | 4003       | -              | http://vdr-service:4003               |
 | issuer-service  | 3000       | 3001           | http://issuer-service:3000            |
 | holder-service  | 9005       | 9205           | http://holder-service:9005            |
@@ -52,7 +52,7 @@ Usa la IP de tu máquina o `host.docker.internal` (Windows/Mac) para que las inv
 
 ## Persistencia
 
-Los volúmenes `kms-data`, `storage-data` y `vdr-data` guardan las bases SQLite. Los datos persisten entre reinicios.
+Los volúmenes `kms-data`, `wallet-data` y `vdr-data` guardan las bases SQLite. Los datos persisten entre reinicios.
 
 Para borrar todo y empezar de cero:
 

@@ -2,14 +2,14 @@ import { Injectable } from '@nestjs/common'
 import { openStorageDb } from './db'
 
 /**
- * Servicio de persistencia de registros.
+ * Servicio de persistencia de registros del wallet-service.
  *
- * Tabla records(type, id, data). Los agentes Credo usan RemoteStorageService
+ * Tabla records(type, id, data). Los agentes Credo usan ExternalWalletStorageService
  * que traduce save/update con toJSON y getById/getAll con fromJSON.
  */
 @Injectable()
 export class StorageService {
-  private dbPromise = openStorageDb(process.env.STORAGE_SQLITE_PATH)
+  private dbPromise = openStorageDb(process.env.WALLET_SQLITE_PATH)
 
   /** Inserta o reemplaza. keyId = id o UUID. Retorna { id }. */
   async save(type: string, id: string | undefined, data: any) {
