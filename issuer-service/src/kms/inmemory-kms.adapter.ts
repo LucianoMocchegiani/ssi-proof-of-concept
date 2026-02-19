@@ -1,6 +1,6 @@
 import { AgentContext, Kms, utils } from '@credo-ts/core'
 import type { Uint8ArrayBuffer } from '@credo-ts/core'
-import { randomBytes, generateKeyPairSync } from 'crypto'
+import { randomBytes, generateKeyPairSync, createPrivateKey, sign } from 'crypto'
 
 /**
  * Adaptador KMS en memoria para POC.
@@ -75,12 +75,35 @@ export class MockKeyManagementService implements Kms.KeyManagementService {
   public async deleteKey(_agentContext: AgentContext, options: Kms.KmsDeleteKeyOptions) {
     return this.keys.delete(options.keyId)
   }
-  public async sign(_agentContext: AgentContext, _options: Kms.KmsSignOptions): Promise<Kms.KmsSignReturn> {
-    throw new Kms.KeyManagementError('sign not implemented in MockKeyManagementService')
+  public async sign(_agentContext: AgentContext, options: Kms.KmsSignOptions): Promise<Kms.KmsSignReturn> {
+    const entry = this.keys.get(options.keyId)
+    if (!entry) throw new Kms.KeyManagementError(`Key ${options.keyId} not found`)
+    const { algorithm } = options
+    if (algorithm !== 'EdDSA' && algorithm !== 'Ed25519') {
+      throw new Kms.KeyManagementError(`Only EdDSA/Ed25519 supported, got ${algorithm}`)
+    }
+    const data = options.data instanceof Uint8Array ? options.data : Buffer.from(options.data as any)
+    const privateKey = createPrivateKey({ key: entry.privateJwk, format: 'jwk' })
+    const signature = sign(null, data, privateKey)
+    return { signature: signature as unknown as Uint8ArrayBuffer }
   }
 
-  public async verify(_agentContext: AgentContext, _options: Kms.KmsVerifyOptions): Promise<Kms.KmsVerifyReturn> {
-    throw new Kms.KeyManagementError('verify not implemented in MockKeyManagementService')
+  public async verify(_agentContext: AgentContext, options: Kms.KmsVerifyOptions): Promise<Kms.KmsVerifyReturn> {
+    const { key, algorithm, data, signature } = options
+    const publicJwk =
+      'keyId' in key && key.keyId
+        ? await this.getPublicKey(_agentContext, key.keyId)
+        : (key as { publicJwk: any }).publicJwk
+    if (!publicJwk) throw new Kms.KeyManagementError('Public key not found for verify')
+    if (algorithm !== 'EdDSA' && algorithm !== 'Ed25519') {
+      throw new Kms.KeyManagementError(`Only EdDSA/Ed25519 supported, got ${algorithm}`)
+    }
+    const { createPublicKey, verify } = await import('crypto')
+    const pubKey = createPublicKey({ key: publicJwk, format: 'jwk' })
+    const dataBuf = data instanceof Uint8Array ? data : Buffer.from(data as any)
+    const sigBuf = signature instanceof Uint8Array ? signature : Buffer.from(signature as any)
+    const valid = verify(null, dataBuf, pubKey, sigBuf)
+    return valid ? { verified: true, publicJwk } : { verified: false }
   }
 
   public async encrypt(_agentContext: AgentContext, _options: Kms.KmsEncryptOptions): Promise<Kms.KmsEncryptReturn> {

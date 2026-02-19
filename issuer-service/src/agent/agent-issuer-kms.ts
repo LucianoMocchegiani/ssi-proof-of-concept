@@ -10,7 +10,7 @@ export function registerKmsConfig(dependencyManager: DependencyManager) {
     dependencyManager.registerInstance(
       Kms.KeyManagementModuleConfig,
       new Kms.KeyManagementModuleConfig({
-        backends: [new MockKeyManagementService(), new (RemoteKeyManagementService as any)(envConfig.remoteKmsUrl)],
+        backends: [new (RemoteKeyManagementService as any)(envConfig.remoteKmsUrl)],
         defaultBackend: (RemoteKeyManagementService as any).backend,
       })
     )
@@ -29,7 +29,7 @@ export function registerKmsConfig(dependencyManager: DependencyManager) {
 export function buildKeyManagementModule(): any {
   if (envConfig.useRemoteKms) {
     return new Kms.KeyManagementModule({
-      backends: [new MockKeyManagementService(), new (RemoteKeyManagementService as any)(envConfig.remoteKmsUrl)],
+      backends: [new (RemoteKeyManagementService as any)(envConfig.remoteKmsUrl)],
       defaultBackend: (RemoteKeyManagementService as any).backend,
     }) as any
   }

@@ -91,5 +91,5 @@ La invitación **no es secreta**. Solo indica "conecta conmigo usando este DID/p
 2. **Emisor** hace `JSON → base64url`.
 3. **Emisor** devuelve `{domain}?oob={base64}`.
 4. **Receptor** recibe la URL, extrae `oob`, hace `base64url → JSON`.
-5. **Receptor** lee `services`. Si es DID → resuelve contra did-service. Si es inline → usa claves directamente.
+5. **Receptor** lee `services`. Si es DID → resuelve contra vdr-service. Si es inline → usa claves directamente.
 6. **Receptor** inicia el handshake usando la info obtenida.

@@ -24,10 +24,17 @@ export async function openKmsDb(dbPath?: string) {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS keys (
       id TEXT PRIMARY KEY,
+      keyType TEXT DEFAULT 'Ed25519',
       publicJwk TEXT,
       privateJwk TEXT
     );
   `)
+  // Migración: añadir keyType si no existe (SQLite)
+  try {
+    await db.run('ALTER TABLE keys ADD COLUMN keyType TEXT DEFAULT \'Ed25519\'')
+  } catch {
+    // Columna ya existe
+  }
 
   return db
 }

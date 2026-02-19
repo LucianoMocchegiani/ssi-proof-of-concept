@@ -10,17 +10,18 @@ En este diseño, el KMS **reemplaza la parte de billetera/criptografía de Askar
 
 ## Responsabilidades
 
-| Operación | Descripción |
-|-----------|-------------|
-| **Crear claves** | Genera pares de claves (Ed25519, X25519, EC, etc.) |
-| **Almacenar claves** | Persiste claves públicas y privadas (privadas cifradas en producción) |
-| **Firmar** | Firma datos con una clave privada |
-| **Verificar** | Verifica firmas con una clave pública |
-| **Cifrar** | Cifra datos (simétrico o asimétrico) |
-| **Descifrar** | Descifra datos |
-| **Random bytes** | Genera bytes aleatorios (nonces, IVs, etc.) |
-| **Importar/exportar** | Importa claves externas, exporta públicas |
-| **Borrar** | Elimina claves de forma segura |
+| Operacion | Implementado | Descripcion |
+|-----------|---------------|-------------|
+| **Crear claves** | Si (solo Ed25519) | Genera pares Ed25519, persiste en SQLite |
+| **Almacenar claves** | Si | Persiste publicJwk y privateJwk en tabla `keys` |
+| **Obtener clave publica** | Si | GET /keys/:id retorna JWK publico |
+| **Firmar** | Si (Ed25519) | POST /sign con keyId y data (base64). Retorna signature (base64) |
+| **Verificar** | Si (Ed25519) | POST /verify con keyId, data, signature. Retorna { valid } |
+| **Cifrar** | Stub | encrypt() es pass-through (retorna datos sin cifrar) |
+| **Descifrar** | Stub | decrypt() es pass-through |
+| **Random bytes** | Si | POST /random; Credo usa crypto local, no llama al KMS |
+| **Importar clave** | Si | POST /keys/import con privateJwk |
+| **Borrar clave** | Si | DELETE /keys/:id |
 
 ---
 
@@ -32,22 +33,23 @@ En este diseño, el KMS **reemplaza la parte de billetera/criptografía de Askar
 
 ---
 
-## Tipos de claves que maneja
+## Tipos de claves (implementacion actual)
 
-| Tipo | Uso típico |
-|------|-------------|
-| **Ed25519** | Firmas (DID auth, JWS, credenciales) |
-| **X25519** | Cifrado ECDH (DIDComm, acuerdos de clave) |
-| **EC (P-256, P-384, P-521)** | Firmas ES256/ES384/ES512 |
-| **secp256k1** | Blockchain (ECDSA) |
-| **AES** | Cifrado simétrico, wrapping de claves |
-| **HMAC** | MACs |
+| Tipo | Implementado | Uso en nuestro sistema |
+|------|--------------|------------------------|
+| **Ed25519** | Si | createKey() genera solo Ed25519. Uso: claves de DID (did:custom), DidDocument |
+| **Otros (X25519, EC, etc.)** | No | El KMS ignora `type` en POST /keys y siempre crea Ed25519 |
+| **Importar JWK** | Si | importKey() acepta cualquier privateJwk |
+
+Para DIDComm, Credo puede usar claves propias o del KMS segun el flujo. Nuestro createKey solo produce Ed25519.
 
 ---
 
-## Cómo se usan las claves en el sistema (y por qué importan)
+## Como se usan las claves en el sistema
 
-### 1. Claves del DID (Ed25519, X25519, EC)
+> **Nota**: Las siguientes secciones describen casos de uso ideales. Nuestra implementacion POC solo soporta Ed25519 para crear DIDs. Firmar, verificar y cifrar/descifrar real no estan implementados en el KMS remoto.
+
+### 1. Claves del DID (Ed25519)
 
 Definen la **identidad** del agente y permiten comunicarse de forma segura.
 
@@ -123,29 +125,32 @@ Las claves permiten que el sistema sea **confidencial** (solo el destinatario le
 
 ## Uso en Credo
 
-Cuando un agente (Issuer, Holder, Verifier) necesita:
+| Necesidad de Credo | Nuestro KMS | Nota |
+|--------------------|-------------|------|
+| **Crear DID** (createKey) | Si | CustomDidRegistrar llama kms.createKey() -> Ed25519 |
+| **Obtener clave publica** (getPublicKey) | Si | Para DidRecord, resolver, etc. |
+| **Firmar** | No | sign() lanza "not implemented"; Credo usa crypto interno |
+| **Verificar** | No | verify() lanza "not implemented" |
+| **Cifrar/descifrar** DIDComm | Stub | encrypt/decrypt son pass-through; Credo puede usar su stack |
 
-1. **Crear un DID** → Credo pide a KMS crear una clave Ed25519
-2. **Firmar una credencial** → Credo pide a KMS firmar con la clave del issuer
-3. **Enviar mensaje DIDComm** → Credo pide a KMS cifrar para el `recipientKey`
-4. **Verificar presentación** → Credo pide a KMS verificar la firma
-
-El agente usa el adaptador `RemoteKeyManagementService`, que traduce las llamadas de Credo a HTTP hacia el KMS.
+El agente usa `RemoteKeyManagementService`, que traduce llamadas de Credo a HTTP hacia kms-service. Para crear DIDs (flujo OOB actual) el KMS basta: createKey + getPublicKey.
 
 ---
 
 ## API REST (endpoints)
 
-| Método | Ruta | Descripción |
+| Metodo | Ruta | Descripcion |
 |--------|------|-------------|
 | GET | `/health` | Health check |
-| POST | `/keys` | Crear clave (body: `{ keyId?: string }`) |
-| GET | `/keys/:id` | Obtener clave pública (JWK) |
-| POST | `/keys/import` | Importar clave privada (body: `{ privateJwk }`) |
+| POST | `/keys` | Crear clave Ed25519. Body: `{ keyId?: string }`. Ignora `type` si Credo lo envia. |
+| GET | `/keys/:id` | Obtener clave publica (JWK). 404 si no existe. |
+| POST | `/keys/import` | Importar clave privada. Body: `{ privateJwk }` |
 | DELETE | `/keys/:id` | Borrar clave |
-| POST | `/random` | Bytes aleatorios (body: `{ length?: number }`) |
-| POST | `/encrypt` | Cifrar datos |
-| POST | `/decrypt` | Descifrar datos (body: `{ encrypted }`) |
+| POST | `/random` | Bytes aleatorios. Body: `{ length?: number }`. Retorna `{ random: "base64..." }` |
+| POST | `/sign` | Firmar con Ed25519. Body: `{ keyId, data (base64) }`. Retorna `{ signature (base64) }` |
+| POST | `/verify` | Verificar firma Ed25519. Body: `{ keyId, data, signature }`. Retorna `{ valid }` |
+| POST | `/encrypt` | Stub: retorna datos sin cifrar |
+| POST | `/decrypt` | Stub: retorna `{ data: body.encrypted }` sin descifrar |
 
 ---
 
@@ -157,20 +162,103 @@ El agente usa el adaptador `RemoteKeyManagementService`, que traduce las llamada
 
 ---
 
+## Almacenamiento con multiples agentes
+
+Con 3 agentes (issuer, holder, verifier) todos usan el **mismo KMS** y la **misma base SQLite**:
+
+```
+kms.sqlite
+  |
+  +-- tabla: keys
+        | id (PRIMARY KEY)  | publicJwk  | privateJwk  |
+        |-------------------|-------------|--------------|
+        | uuid-issuer-1      | {...}       | {...}        |
+        | uuid-holder-1     | {...}       | {...}        |
+        | uuid-verifier-1   | {...}       | {...}        |
+        | ...               | ...         | ...          |
+```
+
+**No hay separacion por agente**: todas las claves van a la misma tabla. Se distinguen solo por `id` (keyId). Credo genera un UUID unico por cada `createKey()`, asi que no hay colision entre agentes.
+
+**Flujo**:
+- Issuer llama `createKey()` al crear su DID -> KMS inserta fila con keyId nuevo
+- Holder llama `createKey()` al crear su DID -> KMS inserta otra fila
+- Verifier igual
+
+Si se quisiera separacion explícita (por wallet/agente), habria que añadir columna `wallet_id` a la tabla o usar instancias separadas de KMS por agente.
+
+---
+
 ## Variables de entorno
 
-| Variable | Default | Descripción |
+| Variable | Default | Descripcion |
 |----------|---------|-------------|
-| `PORT` | 4001 | Puerto HTTP |
+| `KMS_SERVICE_PORT` | 4001 | Puerto HTTP (usado en main.ts) |
 | `KMS_SQLITE_PATH` | `./data/kms.sqlite` | Ruta del archivo SQLite |
 
 ---
 
-## Seguridad en producción
+## Seguridad en produccion
 
 1. **Claves privadas cifradas en reposo** con una master key o HSM
 2. **TLS** obligatorio entre consumidores y KMS
-3. **Autenticación** (API key, mTLS, JWT) para acceder al KMS
+3. **Autenticacion** (API key, mTLS, JWT) para acceder al KMS
 4. **Audit logs** de todas las operaciones
-5. **Rate limiting** y control de acceso por clave/operación
+5. **Rate limiting** y control de acceso por clave/operacion
 6. **HSM** para operaciones sensibles (claves nunca salen del HSM)
+
+---
+
+## Resumen: que funciona hoy en nuestro POC
+
+| Funcionalidad | Estado |
+|---------------|--------|
+| Crear DID (kms.createKey) | OK - Ed25519 |
+| Obtener clave publica | OK |
+| Importar clave | OK |
+| Borrar clave | OK |
+| Random bytes (POST /random) | OK - KMS; Credo usa crypto local |
+| Firmar | OK - Ed25519 |
+| Verificar | OK - Ed25519 |
+| Cifrar/descifrar real | No - pass-through |
+
+---
+
+## Configuración: KMS interno vs remoto
+
+| Variable | Valor | Efecto |
+|----------|-------|--------|
+| `USE_REMOTE_KMS: "false"` | **Actual** | Issuer, holder y verifier usan el **KMS interno** (MockKMS / in-memory de Credo). No dependen de kms-service. |
+| `USE_REMOTE_KMS: "true"` | RemoteKMS | Usan kms-service vía HTTP. Requiere que kms-service esté levantado. |
+
+**Cambio aplicado (feb 2026)** para priorizar que funcione el flujo: `USE_REMOTE_KMS: "false"` en docker-compose para issuer, holder y verifier. Así se valida el flujo completo (OOB, DIDComm, credenciales) con el KMS interno antes de reintentar RemoteKMS.
+
+---
+
+## Error con RemoteKMS: "Invalid options provided to encrypt method"
+
+Cuando `USE_REMOTE_KMS: "true"`, al hacer `POST /receive-invitation` (y flujos DIDComm que cifran), puede aparecer:
+
+```
+Invalid options provided to encrypt method
+Invalid input → at data
+```
+
+### Causa
+
+Credo valida las opciones de `kms.encrypt()` con un esquema Zod (`zKmsEncryptOptions`). El campo `data` usa `zAnyUint8Array`, definido en `@credo-ts/core` como:
+
+```js
+const zAnyUint8Array = z.instanceof(Uint8Array);
+```
+
+`JsonEncoder.toBuffer()` (usado en DidCommEnvelopeService para serializar el mensaje) devuelve un **Buffer** de Node. En teoría, `Buffer` extiende `Uint8Array`, pero en algunos contextos `instanceof` falla y la validación rechaza el valor antes de llamar a nuestro RemoteKMS.
+
+### ¿Se puede parchear en nuestro código?
+
+**No.** La validación ocurre **dentro de Credo** (`KeyManagementApi.encrypt()`) **antes** de delegar al backend. Nuestro `RemoteKeyManagementService.encrypt()` solo se ejecuta si la validación pasa; si falla, nunca llega a nuestro código. No hay hook ni wrapper en nuestra app que permita corregir `data` antes de esa validación.
+
+### Opciones para habilitar RemoteKMS
+
+1. **patch-package** sobre `@credo-ts/core`: modificar `build/utils/zod.mjs` para que `zAnyUint8Array` acepte también `Buffer` y `ArrayBuffer`, convirtiéndolos a `Uint8Array`. El parche se reaplica con `postinstall`.
+2. **Reportar el bug** a [credo-ts/issues](https://github.com/openwallet-foundation/credo-ts/issues) y usar KMS interno hasta que lo corrijan.

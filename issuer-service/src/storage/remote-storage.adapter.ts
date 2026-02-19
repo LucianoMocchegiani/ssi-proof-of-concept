@@ -16,6 +16,16 @@ export class RemoteStorageService {
     return `${this.walletId}::${type}`
   }
 
+  /** Parsea messageName, protocolName, protocolMajorVersion desde message.@type (fallback si tags no están). */
+  private parseMessageTypeFromRecord(d: any): { messageName?: string; protocolName?: string; protocolMajorVersion?: string } | null {
+    const msgType = d?.message?.['@type']
+    if (typeof msgType !== 'string') return null
+    const match = /^(.+)\/([^/\\]+)\/(\d+)\.(\d+)\/([^/\\]+)$/.exec(msgType)
+    if (!match) return null
+    const [, , protocolName, major] = match
+    return { protocolName, protocolMajorVersion: major, messageName: match[5] }
+  }
+
   /** Fetch genérico al storage-service. Lanza si !res.ok. */
   private async call(path: string, init?: RequestInit) {
     const url = `${this.baseUrl}${path}`
@@ -104,19 +114,48 @@ export class RemoteStorageService {
     if (!query || typeof query !== 'object') return items
     return items.filter((item) => {
       const d = item.data
+      const tags = d?.tags ?? d?._tags ?? {}
       if (query.id != null && item.id !== query.id) return false
-      if (query.invitationId != null && d?.outOfBandInvitation?.id !== query.invitationId) return false
+      if (query.associatedRecordId != null && d?.associatedRecordId !== query.associatedRecordId) return false
+      if (query.invitationId != null) {
+        const inv = d?.outOfBandInvitation
+        const invId = inv?.['@id'] ?? inv?.id ?? tags?.invitationId
+        if (invId !== query.invitationId) return false
+      }
       if (query.role !== undefined && d?.role !== query.role) return false
+      if (query.messageName != null || query.protocolName != null || query.protocolMajorVersion != null) {
+        const msgType = (tags?.messageName != null ? tags : null) ?? this.parseMessageTypeFromRecord(d)
+        if (query.messageName != null && msgType?.messageName !== query.messageName) return false
+        if (query.protocolName != null && msgType?.protocolName !== query.protocolName) return false
+        if (query.protocolMajorVersion != null && String(msgType?.protocolMajorVersion) !== String(query.protocolMajorVersion)) return false
+      }
+      if (query.threadId != null && query.threadId !== undefined) {
+        const tid = d?.threadId ?? d?.outOfBandInvitation?.threadId ?? tags?.threadId
+        if (tid !== query.threadId) return false
+      }
       if (query.recipientKeyFingerprints != null && !Array.isArray(query.$or)) {
-        const tags = d?.tags ?? d?._tags ?? {}
         const fps = tags.recipientKeyFingerprints ?? []
         const q = Array.isArray(query.recipientKeyFingerprints) ? query.recipientKeyFingerprints : [query.recipientKeyFingerprints]
         if (!q.every((f: string) => fps.includes(f))) return false
       }
       if (Array.isArray(query.$or)) {
-        const tags = d?.tags ?? d?._tags ?? {}
         const fps = tags.recipientKeyFingerprints ?? []
+        const routingFp = tags.recipientRoutingKeyFingerprint
         const orMatch = query.$or.some((sub: any) => {
+          if (sub?.role !== undefined && d?.role !== sub.role) return false
+          // ConnectionRecord findByDids: cada clause exige did+theirDid, did+previousTheirDids, o previousDids+theirDid
+          const isConnectionDidQuery =
+            (sub?.did != null || Array.isArray(sub?.previousDids)) &&
+            (sub?.theirDid != null || Array.isArray(sub?.previousTheirDids))
+          if (isConnectionDidQuery) {
+            const didMatch = sub?.did != null ? d?.did === sub.did : Array.isArray(sub?.previousDids) && (d?.previousDids ?? []).includes(sub.previousDids[0])
+            const theirDidMatch =
+              sub?.theirDid != null
+                ? d?.theirDid === sub.theirDid
+                : Array.isArray(sub?.previousTheirDids) && (d?.previousTheirDids ?? []).includes(sub.previousTheirDids[0])
+            if (didMatch && theirDidMatch) return true
+            return false
+          }
           if (sub?.did != null && d?.did === sub.did) return true
           if (Array.isArray(sub?.alternativeDids)) {
             const alts = tags.alternativeDids ?? []
@@ -127,6 +166,8 @@ export class RemoteStorageService {
             const arr = Array.isArray(subFps) ? subFps : [subFps]
             if (arr.some((f: string) => fps.includes(f))) return true
           }
+          const subRouting = sub?.recipientRoutingKeyFingerprint
+          if (subRouting && routingFp === subRouting) return true
           return false
         })
         if (!orMatch) return false
@@ -139,7 +180,20 @@ export class RemoteStorageService {
     const type = this.scopeType(recordClass.type)
     const body = { type, query }
     const items = await this.call(`/records/query`, { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } })
-    const filtered = this.filterByQuery(Array.isArray(items) ? items : [], query)
+    let filtered = this.filterByQuery(Array.isArray(items) ? items : [], query)
+    // Evitar RecordDuplicateError: cuando Credo hace findSingleByQuery para OutOfBandRecord
+    // por recipientKey, si hay múltiples invitaciones (mismo issuer DID) devolvemos solo la más reciente
+    const isOobRecipientQuery =
+      recordClass.type === 'OutOfBandRecord' &&
+      Array.isArray(query?.$or) &&
+      query.$or.some((s: any) => s?.recipientKeyFingerprints != null || s?.recipientRoutingKeyFingerprint != null)
+    if (isOobRecipientQuery && filtered.length > 1) {
+      filtered = filtered.sort((a, b) => {
+        const ta = a.data?.createdAt ?? a.data?.updatedAt ?? 0
+        const tb = b.data?.createdAt ?? b.data?.updatedAt ?? 0
+        return tb - ta // más reciente primero
+      }).slice(0, 1)
+    }
     return filtered.map((item: { id: string; data: any }) =>
       this.ensureRecordInstance(JsonTransformer.fromJSON(item.data, recordClass), recordClass)
     )

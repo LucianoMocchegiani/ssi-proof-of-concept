@@ -1,11 +1,12 @@
-/** Módulo raíz del issuer. Incluye Invitation e Issuer. */
+/** Módulo raíz del issuer. */
 import { Module } from '@nestjs/common'
-import { IssuerController } from './issuer/issuer.controller'
 import { InvitationModule } from './invitation/invitation.module'
+import { ConnectionsModule } from './connections/connections.module'
+import { CredentialsModule } from './credentials/credentials.module'
+import { CommonModule } from './common/common.module'
 
 @Module({
-  imports: [InvitationModule],
-  controllers: [IssuerController],
+  imports: [CommonModule, InvitationModule, ConnectionsModule, CredentialsModule],
 })
 export class AppModule {}
 

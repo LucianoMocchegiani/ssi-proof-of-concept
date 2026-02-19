@@ -14,7 +14,7 @@ Monorepo de servicios SSI (Self-Sovereign Identity) que implementa Issuer, Holde
 |----------|-----------|-----|
 | **kms-service** | 4001 | Gestión de claves (crear, firmar, cifrar). NestJS + SQLite. Sin Credo. |
 | **storage-service** | 4002 | CRUD de registros por type/id. NestJS + SQLite. Sin Credo. |
-| **did-service** | 4003 | Registro y resolución de DIDs did:custom. NestJS + SQLite. Sin Credo. |
+| **vdr-service** | 4003 | VDR: registro y resolución de DIDs did:custom, did:web. NestJS + SQLite. Sin Credo. |
 | **issuer-service** | 3000, 3001 | Agente Credo (issuer). Invitaciones OOB, emisión de credenciales. |
 | **holder-service** | 9005, 9205 | Agente Credo (holder). Recibe invitaciones, almacena credenciales. |
 | **verifier-service** | 9004, 9204 | Agente Credo (verifier). Verifica credenciales y presentaciones. |
@@ -28,6 +28,6 @@ Monorepo de servicios SSI (Self-Sovereign Identity) que implementa Issuer, Holde
 ### Convenciones Críticas
 
 - **RemoteStorageService:** Scope por walletId (`walletId::RecordType`). save/update usan `record.toJSON()`. getById/getAll usan `JsonTransformer.fromJSON()`. getById devuelve null en 404.
-- **DIDs:** did:custom en KMS + did-service. CustomDidResolver y CustomDidRegistrar en issuer y holder.
+- **DIDs:** did:custom en KMS + vdr-service. CustomDidResolver y CustomDidRegistrar en issuer y holder.
 - **Agentes:** `autoUpdateStorageOnStartup: true` en config. Inicialización asíncrona tras Nest bootstrap.
 - **Documentación:** `docs/` (KMS-SERVICE, STORAGE-SERVICE, INSTRUCCIONES-DOCKER). `AGENTS.md` en raíz.

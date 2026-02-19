@@ -14,7 +14,7 @@ import { DidKey } from '@credo-ts/core'
 import { envConfig } from '../config'
 
 /**
- * Crea did:web registrando en did-service (emula publicar en la web sin usar Storage).
+ * Crea did:web registrando en vdr-service (emula publicar en la web sin usar Storage).
  * Formato local: did:web:local:<uuid>
  */
 export interface WebDidCreateOptions extends DidCreateOptions {
@@ -32,7 +32,7 @@ export interface WebDidCreateOptions extends DidCreateOptions {
 export class WebDidRegistrar implements DidRegistrar {
   public readonly supportedMethods = ['web']
 
-  constructor(private baseUrl: string = envConfig.didServiceUrl) {}
+  constructor(private baseUrl: string = envConfig.vdrServiceUrl) {}
 
   async create(agentContext: AgentContext, options: WebDidCreateOptions): Promise<DidCreateResult> {
     const didRepository = agentContext.dependencyManager.resolve(DidRepository)

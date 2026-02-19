@@ -193,7 +193,7 @@ Cuando generes análisis, considera:
 - **Issuer**: Emisor de credenciales, invitaciones OOB
 - **Holder**: Recipiente de credenciales, almacenamiento
 - **Verifier**: Verificador de credenciales y presentaciones
-- **DID**: did:custom, registro en KMS y did-service
+- **DID**: did:custom, registro en KMS y vdr-service
 - **RemoteStorageService**: Scope walletId, serialización JSON
 - **Credo-TS**: Agentes, adaptadores, records
 
@@ -212,7 +212,7 @@ Mencionar tecnologías relevantes:
 credo/
 ├── kms-service/       # Puerto 4001
 ├── storage-service/   # Puerto 4002
-├── did-service/       # Puerto 4003
+├── vdr-service/       # Puerto 4003
 ├── issuer-service/    # 3000, 3001
 ├── holder-service/    # 9005, 9205
 ├── verifier-service/  # 9004, 9204

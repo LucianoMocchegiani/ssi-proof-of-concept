@@ -42,7 +42,7 @@ El Storage guarda **registros** identificados por `type` e `id`. Algunos tipos u
 | `StorageVersionRecord` | Versión del framework (migraciones) |
 | Otros tipos de Credo | Mediation, etc. |
 
-**Nota**: Los documentos DID (`DidDocument`) se almacenan en **did-service**, no en Storage. Esto emula la realidad: los documentos públicos viven en un registro separado (web, blockchain, etc.).
+**Nota**: Los documentos DID (`DidDocument`) se almacenan en **vdr-service**, no en Storage. Esto emula la realidad: los documentos públicos viven en un registro separado (web, blockchain, etc.).
 
 Cada registro tiene:
 - **type**: tipo/categoría del registro
@@ -116,4 +116,4 @@ El Storage contiene datos sensibles (credenciales, conexiones). Hay que restring
 - **Issuer/Verifier controller**: puede consultar registros vía GET directo (por ejemplo, `/issue` busca en storage)
 - **Cualquier servicio**: puede usar la API genérica para sus propios `type`/`id`/`data`
 
-**Nota**: Los documentos DID se gestionan en **did-service** (ver `docs/DID-SERVICE.md`).
+**Nota**: Los documentos DID se gestionan en **vdr-service** (ver `docs/VDR-SERVICE.md`).

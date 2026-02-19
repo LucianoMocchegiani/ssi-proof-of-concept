@@ -16,7 +16,7 @@ Servicios agnosticos (KMS, storage, DID) y agentes Credo se comunican de forma i
 
 ```
   +-----------------+   +-----------------+   +-----------------+
-  |  kms-service    |   | storage-service |   |  did-service    |
+  |  kms-service    |   | storage-service |   |  vdr-service    |
   |  :4001          |   |  :4002          |   |  :4003          |
   |  (claves)       |   |  (registros)    |   |  (DIDs)         |
   +--------+--------+   +--------+--------+   +--------+--------+
@@ -34,6 +34,8 @@ Servicios agnosticos (KMS, storage, DID) y agentes Credo se comunican de forma i
 
 Cada agente (issuer, holder, verifier) se conecta directamente a los tres servicios.
 
+Ver [docs/graficos/flujos-sistema.md](docs/graficos/flujos-sistema.md) para diagramas de flujo (creacion DID, invitacion OOB).
+
 ---
 
 ## Servicios
@@ -42,9 +44,9 @@ Cada agente (issuer, holder, verifier) se conecta directamente a los tres servic
 
 | Servicio          | Puerto | Descripcion |
 |-------------------|--------|-------------|
-| **kms-service**   | 4001   | Gestion de claves: creacion, cifrado, descifrado. Expone API REST para keys, encrypt, decrypt. |
+| **kms-service**   | 4001   | Gestion de claves: creacion (Ed25519). API REST para keys. encrypt/decrypt son stubs (pass-through) en POC. |
 | **storage-service** | 4002 | Almacenamiento generico por (type, id). Credo persiste DidRecord, ConnectionRecord, OutOfBandRecord, etc. |
-| **did-service**   | 4003   | Registro y resolucion de DIDs (ej. `did:custom`). Credo lo usa como DID resolver y registrar. |
+| **vdr-service**   | 4003   | VDR: registro y resolucion de DIDs (did:custom, did:web). Credo lo usa como DID resolver y registrar. |
 
 ### Servicios con Credo
 
@@ -74,7 +76,7 @@ docker compose up -d --build
 # Health checks
 curl http://localhost:4001/health  # kms
 curl http://localhost:4002/health  # storage
-curl http://localhost:4003/health  # did
+curl http://localhost:4003/health  # vdr
 curl http://localhost:3000/health  # issuer
 curl http://localhost:9005/health  # holder
 curl http://localhost:9004/health  # verifier
@@ -116,7 +118,7 @@ cd ../holder-service && npm install
 cd ../verifier-service && npm install
 cd ../kms-service && npm install
 cd ../storage-service && npm install
-cd ../did-service && npm install
+cd ../vdr-service && npm install
 
 # Levantar servicios agnosticos primero
 # Luego issuer, holder, verifier
@@ -125,7 +127,7 @@ cd ../did-service && npm install
 Variables de entorno relevantes:
 - `USE_REMOTE_KMS` / `REMOTE_KMS_URL`
 - `USE_REMOTE_STORAGE` / `REMOTE_STORAGE_URL`
-- `DID_SERVICE_URL`
+- `VDR_SERVICE_URL`
 
 ---
 
@@ -133,5 +135,5 @@ Variables de entorno relevantes:
 
 - [Credo-TS](https://credo.js.org/) - Framework SSI
 - NestJS - API REST
-- SQLite - Persistencia en kms, storage y did
+- SQLite - Persistencia en kms, storage y vdr
 - Docker - Orquestacion

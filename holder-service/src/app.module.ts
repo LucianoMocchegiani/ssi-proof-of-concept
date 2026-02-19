@@ -1,11 +1,12 @@
-/** Módulo raíz del holder. Incluye Invitation y Holder. */
+/** Módulo raíz del holder. */
 import { Module } from '@nestjs/common'
-import { HolderController } from './holder/holder.controller'
 import { InvitationModule } from './invitation/invitation.module'
+import { ConnectionsModule } from './connections/connections.module'
+import { CredentialsModule } from './credentials/credentials.module'
+import { CommonModule } from './common/common.module'
 
 @Module({
-  imports: [InvitationModule],
-  controllers: [HolderController],
+  imports: [CommonModule, InvitationModule, ConnectionsModule, CredentialsModule],
 })
 export class AppModule {}
 

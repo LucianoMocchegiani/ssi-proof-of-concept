@@ -24,6 +24,12 @@ export class StorageController {
       // eslint-disable-next-line no-console
       console.log('[storage] save DidRecord', { type, id: id?.slice(0, 50) })
     }
+    if (type?.includes('OutOfBandRecord')) {
+      const inv = data?.outOfBandInvitation
+      const invId = inv?.['@id'] ?? inv?.id ?? data?.invitationId
+      // eslint-disable-next-line no-console
+      console.log('[storage] save OutOfBandRecord', { type, recordId: id?.slice(0, 36), invitationId: invId })
+    }
     const result = await this.svc.save(type, id, data)
     return result
   }
@@ -101,11 +107,54 @@ export class StorageController {
       // eslint-disable-next-line no-console
       console.log('[storage] query DidRecord', { type: body.type, query: body.query, count: items.length })
     }
+    if (body.type?.includes('OutOfBandRecord') && body.query?.invitationId) {
+      const invIds = (items as { id: string; data: any }[]).map((r) => {
+        const inv = r.data?.outOfBandInvitation
+        return inv?.['@id'] ?? inv?.id ?? r.data?.invitationId ?? '-'
+      })
+      // eslint-disable-next-line no-console
+      console.log('[storage] query OutOfBandRecord by invitationId', { invitationId: body.query.invitationId, count: items.length, storedInvIds: invIds })
+    }
     const q = body.query
     if (q?.id && !items.some((r: { id: string }) => r.id === q.id)) {
       // eslint-disable-next-line no-console
       console.warn('[storage] query miss by id', { type: body.type, queryId: q.id, existingIds: items.map((r: { id: string }) => r.id) })
     }
     return items
+  }
+
+  /**
+   * DEBUG: Lista OutOfBandRecords del issuer con invitation ids.
+   * Para verificar que create-invitation guardó correctamente.
+   */
+  @Get('debug/oob-invitations')
+  async debugOobInvitations() {
+    const type = 'issuer-wallet::OutOfBandRecord'
+    const items = (await this.svc.getAll(type)) as { id: string; data: any }[]
+    return items.map(({ id, data }) => {
+      const inv = data?.outOfBandInvitation
+      const invId = inv?.['@id'] ?? inv?.id ?? (data?.tags ?? data?._tags)?.invitationId ?? '-'
+      return { recordId: id, invitationId: invId, role: data?.role ?? '-' }
+    })
+  }
+
+  /**
+   * DEBUG: Lista DidRecords de issuer, holder y verifier con sus kmsKeyIds.
+   * Útil para cruzar con GET /keys-debug del KMS y ver si las claves existen.
+   */
+  @Get('debug/did-keys')
+  async debugDidKeys() {
+    const wallets = ['issuer-wallet', 'holder-wallet', 'verifier-wallet']
+    const result: Record<string, Array<{ did: string; kmsKeyIds: string[] }>> = {}
+    for (const w of wallets) {
+      const type = `${w}::DidRecord`
+      const items = await this.svc.getAll(type)
+      result[w] = (items as { id: string; data: any }[]).map(({ id, data }) => ({
+        id,
+        did: data?.did ?? data?.id ?? '-',
+        kmsKeyIds: (data?.keys ?? []).map((k: { kmsKeyId?: string }) => k.kmsKeyId).filter(Boolean),
+      }))
+    }
+    return result
   }
 }

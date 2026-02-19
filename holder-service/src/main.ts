@@ -1,31 +1,40 @@
 import 'reflect-metadata'
+import { Logger } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from './app.module'
 import { envConfig } from './config'
 import { initializeHolderAgent, ensureHolderDid } from './agent/agent-holder'
 import { setHolderAgent } from './agent/agent-store'
 import { setHolderDid } from './agent/holder-did-store'
+import { WebSocketServer } from 'ws'
 
-/** Bootstrap: inicializa agente y DID, luego levanta HTTP. */
+const logger = new Logger('Holder')
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection', reason)
+})
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception', err)
+})
+
+/** Bootstrap: Nest maneja HTTP (rutas), luego adjuntamos WebSocket DIDComm al mismo servidor. */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
   const port = envConfig.port
 
-  const agent = await initializeHolderAgent()
+  await app.listen(port)
+  const httpServer = app.getHttpServer()
+  const wsServer = new WebSocketServer({ server: httpServer })
+
+  const agent = await initializeHolderAgent(wsServer)
   setHolderAgent(agent)
   const did = await ensureHolderDid(agent)
   setHolderDid(did)
-  // eslint-disable-next-line no-console
-  console.log('Holder agent initialized', { did })
-
-  await app.listen(port)
-  // eslint-disable-next-line no-console
-  console.log(`Holder service listening on ${port}`)
+  logger.log(`Agent initialized did=${did}`)
+  logger.log(`Listening on ${port} (API + DIDComm WebSocket)`)
 }
 
 bootstrap().catch(err => {
-  // eslint-disable-next-line no-console
-  console.error('Bootstrap failed', err)
+  logger.error('Bootstrap failed', err)
   process.exit(1)
 })
-

@@ -3,7 +3,7 @@ import { DidDocument, JsonTransformer } from '@credo-ts/core'
 import { envConfig } from '../config'
 
 /**
- * Resuelve DIDs did:custom consultando did-service (GET /did/:id).
+ * Resuelve DIDs did:custom consultando vdr-service (GET /did/:id).
  *
  * Credo lo usa durante conexión y verificación para obtener
  * el DID Document (incluye service con serviceEndpoint).
@@ -13,9 +13,9 @@ export class CustomDidResolver implements DidResolver {
   public readonly allowsCaching = true
   public readonly allowsLocalDidRecord = true
 
-  constructor(private baseUrl: string = envConfig.didServiceUrl) {}
+  constructor(private baseUrl: string = envConfig.vdrServiceUrl) {}
 
-  /** Consulta did-service. Retorna didDocument o error notFound. */
+  /** Consulta vdr-service. Retorna didDocument o error notFound. */
   async resolve(
     _agentContext: AgentContext,
     did: string,

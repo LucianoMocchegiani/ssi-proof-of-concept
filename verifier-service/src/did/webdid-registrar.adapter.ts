@@ -26,11 +26,11 @@ export interface WebDidCreateOptions extends DidCreateOptions {
   }
 }
 
-/** Registra DIDs did:web en did-service. Soporta createKey o keyId existente. */
+/** Registra DIDs did:web en vdr-service. Soporta createKey o keyId existente. */
 export class WebDidRegistrar implements DidRegistrar {
   public readonly supportedMethods = ['web']
 
-  constructor(private baseUrl: string = envConfig.didServiceUrl) {}
+  constructor(private baseUrl: string = envConfig.vdrServiceUrl) {}
 
   async create(agentContext: AgentContext, options: WebDidCreateOptions): Promise<DidCreateResult> {
     const didRepository = agentContext.dependencyManager.resolve(DidRepository)

@@ -2,13 +2,13 @@ import type { AgentContext, DidResolutionResult, DidResolver, ParsedDid } from '
 import { DidDocument, JsonTransformer } from '@credo-ts/core'
 import { envConfig } from '../config'
 
-/** Resuelve DIDs did:web consultando did-service. Reutiliza mismo endpoint que did:custom. */
+/** Resuelve DIDs did:web consultando vdr-service. Reutiliza mismo endpoint que did:custom. */
 export class WebDidResolver implements DidResolver {
   public readonly supportedMethods = ['web']
   public readonly allowsCaching = true
   public readonly allowsLocalDidRecord = true
 
-  constructor(private baseUrl: string = envConfig.didServiceUrl) {}
+  constructor(private baseUrl: string = envConfig.vdrServiceUrl) {}
 
   async resolve(
     _agentContext: AgentContext,

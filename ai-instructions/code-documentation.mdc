@@ -3,7 +3,7 @@ description: Agrega documentación JSDoc automáticamente mientras desarrollas c
 globs:
   - kms-service/**/*.ts
   - storage-service/**/*.ts
-  - did-service/**/*.ts
+  - vdr-service/**/*.ts
   - issuer-service/**/*.ts
   - holder-service/**/*.ts
   - verifier-service/**/*.ts
@@ -132,12 +132,12 @@ export class RemoteStorageService implements IStorageService {
 
 ```typescript
 /**
- * Resuelve DIDs did:custom consultando did-service.
+ * Resuelve DIDs did:custom consultando vdr-service.
  *
  * Credo-TS llama a este adaptador cuando necesita resolver un DID
  * durante el flujo de conexión o verificación.
  *
- * @see did-service GET /did/:id
+ * @see vdr-service GET /did/:id
  */
 export class CustomDidResolver implements IDidResolver {
   /**
@@ -211,7 +211,7 @@ Cuando documentes, considera que:
 - El stack tiene 6 servicios: kms, storage, did (base) + issuer, holder, verifier (agentes)
 - Los agentes usan adaptadores para comunicarse con los servicios base
 - Storage usa scope walletId para separar datos entre issuer, holder, verifier
-- DIDs did:custom se registran en KMS y did-service
+- DIDs did:custom se registran en KMS y vdr-service
 - Credo-TS maneja el protocolo DIDComm; nuestros adaptadores son la capa de persistencia/comunicación
 
 ### Ejemplos de Documentación Contextual
@@ -246,7 +246,7 @@ async receiveInvitation(
 3. **Documenta excepciones**: Usa `@throws` para errores conocidos
 4. **Incluye ejemplos**: Usa `@example` cuando ayude a la comprensión
 5. **No repitas el nombre**: No digas "Esta función obtiene" si ya se llama `getById`
-6. **Menciona integraciones**: storage-service, kms-service, did-service, Credo-TS
+6. **Menciona integraciones**: storage-service, kms-service, vdr-service, Credo-TS
 
 ## Alcance por Servicio
 
@@ -256,7 +256,7 @@ La regla se aplica a todos los servicios del stack:
 |----------|-----|-----------------|
 | **kms-service** | Gestión de claves (Ed25519, X25519) | Controllers, servicios, endpoints POST /keys, encrypt, decrypt |
 | **storage-service** | CRUD genérico de registros | Controller, servicio, endpoints /records |
-| **did-service** | Registro y resolución de DIDs | Controller, servicio, POST /did, GET /did/:id |
+| **vdr-service** | VDR: Registro y resolución de DIDs | Controller, servicio, POST /did, GET /did/:id |
 | **issuer-service** | Agente emisor de credenciales | Controllers, adaptadores (storage, did, kms), invitation flow |
 | **holder-service** | Agente que recibe credenciales | Controllers, adaptadores, receive-invitation |
 | **verifier-service** | Agente verificador | Controllers, adaptadores, verify flow |

@@ -30,12 +30,12 @@ export interface CustomDidCreateOptions extends DidCreateOptions {
 
 /**
  * Registrar de DIDs did:custom. Crea par de claves, DID Document con DidCommV1Service,
- * y registra en did-service (endpoint desde envConfig.didcommEndpoint).
+ * y registra en vdr-service (endpoint desde envConfig.didcommEndpoint).
  */
 export class CustomDidRegistrar implements DidRegistrar {
   public readonly supportedMethods = ['custom']
 
-  constructor(private baseUrl: string = envConfig.didServiceUrl) {}
+  constructor(private baseUrl: string = envConfig.vdrServiceUrl) {}
 
   async create(agentContext: AgentContext, options: CustomDidCreateOptions): Promise<DidCreateResult> {
     const didRepository = agentContext.dependencyManager.resolve(DidRepository)
@@ -108,6 +108,7 @@ export class CustomDidRegistrar implements DidRegistrar {
             kmsKeyId: keyId,
           },
         ],
+        tags: { recipientKeyFingerprints: [jwk.fingerprint] },
       })
       await didRepository.save(agentContext, didRecord)
 

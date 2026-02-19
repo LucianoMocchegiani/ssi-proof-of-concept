@@ -51,7 +51,7 @@ Genera un archivo Markdown llamado `[TICKET-ID]-action-plan_[FECHA-HORA].md` con
 ### Servicio(s) Afectado(s)
 - [ ] kms-service
 - [ ] storage-service
-- [ ] did-service
+- [ ] vdr-service
 - [ ] issuer-service
 - [ ] holder-service
 - [ ] verifier-service
@@ -165,7 +165,7 @@ Una vez completados todos los pasos anteriores y verificada la implementación, 
   - Tipo de registro: `walletId::RecordType`
 
 - **DIDs:**
-  - did:custom registrado en KMS y did-service
+  - did:custom registrado en KMS y vdr-service
 
 ## Dependencias
 
@@ -177,7 +177,7 @@ Una vez completados todos los pasos anteriores y verificada la implementación, 
 ### Variables de Entorno (si aplica)
 - `USE_REMOTE_KMS`: true para usar kms-service
 - `USE_REMOTE_STORAGE`: true para usar storage-service
-- `KMS_SERVICE_URL`, `STORAGE_SERVICE_URL`, `DID_SERVICE_URL`: URLs de servicios
+- `KMS_SERVICE_URL`, `STORAGE_SERVICE_URL`, `VDR_SERVICE_URL`: URLs de servicios
 
 ## Archivos Principales Involucrados
 
@@ -225,7 +225,7 @@ Si se necesita clarificación para mejorar el plan de acción, haz preguntas de 
 credo/
 ├── kms-service/       # Puerto 4001 - Gestión de claves
 ├── storage-service/   # Puerto 4002 - CRUD de registros
-├── did-service/       # Puerto 4003 - DIDs did:custom
+├── vdr-service/       # Puerto 4003 - VDR (DIDs did:custom, did:web)
 ├── issuer-service/    # 3000, 3001 - Agente emisor
 ├── holder-service/    # 9005, 9205 - Agente holder
 ├── verifier-service/  # 9004, 9204 - Agente verificador
@@ -277,7 +277,7 @@ servicio/
 
 ### Variables de Entorno Comunes
 - `USE_REMOTE_KMS`, `USE_REMOTE_STORAGE`: activar servicios remotos
-- `KMS_SERVICE_URL`, `STORAGE_SERVICE_URL`, `DID_SERVICE_URL`: URLs internas (ej. http://kms-service:4001)
+- `KMS_SERVICE_URL`, `STORAGE_SERVICE_URL`, `VDR_SERVICE_URL`: URLs internas (ej. http://kms-service:4001)
 - `PORT`: Puerto del servicio
 
 ## Output

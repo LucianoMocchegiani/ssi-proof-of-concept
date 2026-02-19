@@ -1,3 +1,4 @@
+import { ConsoleLogger, LogLevel } from '@credo-ts/core'
 import { envConfig } from '../config'
 
 /** Configuración del agente Credo para el holder. */
@@ -8,4 +9,5 @@ export const holderAgentConfig = {
     key: envConfig.walletKey,
   },
   autoUpdateStorageOnStartup: true,
+  logger: new ConsoleLogger(LogLevel.debug),
 } as any

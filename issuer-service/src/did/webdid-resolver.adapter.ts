@@ -3,15 +3,15 @@ import { DidDocument, JsonTransformer } from '@credo-ts/core'
 import { envConfig } from '../config'
 
 /**
- * Resuelve did:web contra did-service (emula la web sin usar Storage).
- * El documento se sirve desde did-service GET /did/:id o /:id/did.json
+ * Resuelve did:web contra vdr-service (emula la web sin usar Storage).
+ * El documento se sirve desde vdr-service GET /did/:id o /:id/did.json
  */
 export class WebDidResolver implements DidResolver {
   public readonly supportedMethods = ['web']
   public readonly allowsCaching = true
   public readonly allowsLocalDidRecord = true
 
-  constructor(private baseUrl: string = envConfig.didServiceUrl) {}
+  constructor(private baseUrl: string = envConfig.vdrServiceUrl) {}
 
   async resolve(
     _agentContext: AgentContext,

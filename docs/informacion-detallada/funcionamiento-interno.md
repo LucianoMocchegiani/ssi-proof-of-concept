@@ -6,7 +6,7 @@
 - **Credo** → `DidRegistrarService` selecciona `CustomDidRegistrar`
 - **CustomDidRegistrar**:
   - **KMS**: `kms.createKey({ type: Ed25519 })` → crea clave, **clave privada queda en KMS**
-  - **did-service**: `POST /did` con `{ id: did, document }` → registra el documento DID
+  - **vdr-service**: `POST /did` con `{ id: did, document }` → registra el documento DID
   - **Storage**: vía `didRepository.save()` → guarda `DidRecord` (metadata: did, didDocument, kmsKeyId)
 - Devuelve `{ did }`
 
@@ -25,7 +25,7 @@
 **3. `outOfBandRecord.outOfBandInvitation.toUrl({ domain })`**
 - **Credo** → `toJSON()` del mensaje → `JsonEncoder.toBase64URL()` → `{domain}?oob={base64}`
 
-**Resumen emisor:** KMS (crear clave), did-service (registrar DID), Storage (DidRecord + OutOfBandRecord).
+**Resumen emisor:** KMS (crear clave), vdr-service (registrar DID), Storage (DidRecord + OutOfBandRecord).
 
 ---
 
@@ -39,7 +39,7 @@
 - **Credo** ve `services: ["did:custom:..."]` (string = DID)
 - Llama a `didCommDocumentService.resolveServicesFromDid(agentContext, did)`
 - **Credo** usa el **DidResolver** registrado → **CustomDidResolver**
-- **CustomDidResolver**: `GET {did-service}/did/{did}` → obtiene el documento DID
+- **CustomDidResolver**: `GET {vdr-service}/did/{did}` → obtiene el documento DID
 - Extrae `recipientKeys` del documento (verificationMethod)
 - Devuelve fingerprints para etiquetar el record
 
@@ -52,7 +52,7 @@
 - **Storage**: guarda `ConnectionRecord`
 - El mensaje se envía por HTTP al endpoint del issuer (obtenido del DID resuelto)
 
-**Resumen holder:** did-service (resolver DID), Storage (OutOfBandRecord, ConnectionRecord), KMS (clave para el handshake).
+**Resumen holder:** vdr-service (resolver DID), Storage (OutOfBandRecord, ConnectionRecord), KMS (clave para el handshake).
 
 ---
 
@@ -73,7 +73,7 @@
 
 ## Diagrama de componentes por momento
 
-| Momento | KMS | Storage | did-service |
+| Momento | KMS | Storage | vdr-service |
 |---------|-----|---------|-------------|
 | Emisor: `dids.create` | ✅ Crear clave Ed25519 | ✅ DidRecord | ✅ POST /did |
 | Emisor: `createInvitation` | — | ✅ OutOfBandRecord | — |

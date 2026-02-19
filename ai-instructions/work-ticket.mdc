@@ -68,7 +68,7 @@ El archivo `[TICKET-ID]_work-ticket_[FECHA-HORA].md` generado debe contener las 
 ### Servicios Afectados
 - [ ] kms-service
 - [ ] storage-service
-- [ ] did-service
+- [ ] vdr-service
 - [ ] issuer-service
 - [ ] holder-service
 - [ ] verifier-service
@@ -187,7 +187,7 @@ Cuando generes tickets, considera:
 - **Issuer**: Emisor de credenciales, crea invitaciones OOB
 - **Holder**: Recibe invitaciones, almacena credenciales
 - **Verifier**: Verifica credenciales y presentaciones
-- **DID**: did:custom, registro en KMS + did-service
+- **DID**: did:custom, registro en KMS + vdr-service
 - **RemoteStorageService**: Scope walletId, serialización JSON
 - **Adaptadores**: RemoteStorage, RemoteKMS, CustomDidResolver, CustomDidRegistrar
 

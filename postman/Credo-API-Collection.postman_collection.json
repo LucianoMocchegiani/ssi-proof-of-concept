@@ -1,0 +1,551 @@
+{
+  "info": {
+    "name": "Credo - Credenciales Verificables",
+    "description": "Colección para Credo (DIDComm). Incluye flujos de emisión, presentación y verificación.\n\n**Flujos:**\n- Issuer-iniciado: Issuer ofrece la credencial tras la conexión\n- Holder-iniciado: Holder propone, Issuer acepta y ofrece\n- Present Proof: Verifier solicita prueba, Holder presenta credencial(es)\n\n**Variables:** issuer_base, holder_base, verifier_base, invitationUrl, connectionId, holderDid",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "issuer_base", "value": "http://localhost:3000" },
+    { "key": "holder_base", "value": "http://localhost:9005" },
+    { "key": "verifier_base", "value": "http://localhost:9004" },
+    { "key": "storage_base", "value": "http://localhost:4002" },
+    { "key": "vdr_base", "value": "http://localhost:4003" },
+    { "key": "kms_base", "value": "http://localhost:4001" },
+    { "key": "invitationUrl", "value": "" },
+    { "key": "connectionId", "value": "" },
+    { "key": "holderDid", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Flujo Issuer-iniciado (Issuer ofrece)",
+      "item": [
+        {
+          "name": "1.1 Issuer - Crear invitación",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{issuer_base}}/create-invitation",
+            "description": "Issuer genera invitación OOB. El script guarda invitation en invitationUrl."
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.invitation) {",
+                "  pm.collectionVariables.set('invitationUrl', res.invitation);",
+                "  console.log('invitationUrl guardada');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "1.2 Holder - Recibir invitación",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitationUrl\": \"{{invitationUrl}}\"\n}"
+            },
+            "url": "{{holder_base}}/receive-invitation",
+            "description": "Holder procesa invitación y establece conexión. Esperar ~5s antes del siguiente paso."
+          }
+        },
+        {
+          "name": "1.3 Issuer - Listar conexiones",
+          "request": {
+            "method": "GET",
+            "url": "{{issuer_base}}/connections",
+            "description": "Obtener connectionId y holderDid para offer-credential. Ejecutar tras 1.2."
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.connections && res.connections.length > 0) {",
+                "  const c = res.connections[0];",
+                "  pm.collectionVariables.set('connectionId', c.id);",
+                "  if (c.holderDid) pm.collectionVariables.set('holderDid', c.holderDid);",
+                "  console.log('connectionId y holderDid guardados');",
+                "} else {",
+                "  console.log('Sin conexiones. Esperar tras receive-invitation.');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "1.4 Issuer - Ofertar credencial",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"connectionId\": \"{{connectionId}}\",\n  \"credential\": {\n    \"credentialSubject\": {\n      \"id\": \"{{holderDid}}\",\n      \"name\": \"Juan Pérez\",\n      \"email\": \"juan@ejemplo.com\"\n    },\n    \"type\": [\"GenericCredential\"]\n  },\n  \"proofType\": \"Ed25519Signature2018\"\n}"
+            },
+            "url": "{{issuer_base}}/offer-credential",
+            "description": "Issuer envía Offer. El Holder acepta automáticamente. Requiere 1.3."
+          }
+        },
+        {
+          "name": "1.5 Holder - Listar credenciales",
+          "request": {
+            "method": "GET",
+            "url": "{{holder_base}}/credentials",
+            "description": "Lista credenciales verificables (objeto VC por credencial)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Flujo Holder-iniciado (Holder propone)",
+      "item": [
+        {
+          "name": "2.1 Issuer - Crear invitación",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{issuer_base}}/create-invitation",
+            "description": "Issuer genera invitación OOB."
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.invitation) {",
+                "  pm.collectionVariables.set('invitationUrl', res.invitation);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "2.2 Holder - Recibir invitación",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitationUrl\": \"{{invitationUrl}}\"\n}"
+            },
+            "url": "{{holder_base}}/receive-invitation",
+            "description": "Holder procesa invitación. Esperar ~5s antes del siguiente paso."
+          }
+        },
+        {
+          "name": "2.3 Holder - Listar conexiones",
+          "request": {
+            "method": "GET",
+            "url": "{{holder_base}}/connections",
+            "description": "Obtener connectionId del Holder para propose-credential. Usar id del holder, no del issuer."
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.connections && res.connections.length > 0) {",
+                "  pm.collectionVariables.set('connectionId', res.connections[0].id);",
+                "  console.log('connectionId guardado');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "2.4 Holder - Proponer credencial",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"connectionId\": \"{{connectionId}}\",\n  \"credentialSubject\": {\n    \"name\": \"María García\",\n    \"email\": \"maria@ejemplo.com\"\n  },\n  \"type\": [\"GenericCredential\"]\n}"
+            },
+            "url": "{{holder_base}}/propose-credential",
+            "description": "Holder inicia el flujo proponiendo. Issuer acepta y envía Offer automáticamente."
+          }
+        },
+        {
+          "name": "2.5 Holder - Listar credenciales",
+          "request": {
+            "method": "GET",
+            "url": "{{holder_base}}/credentials",
+            "description": "Verificar credencial recibida."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Flujo Present Proof (Verifier solicita, Holder presenta)",
+      "item": [
+        {
+          "name": "3.1 Verifier - Crear invitación",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{verifier_base}}/create-invitation",
+            "description": "Verifier genera invitación OOB. Requiere que el Holder tenga al menos una credencial (ejecutar flujo 1 o 2 antes)."
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.invitation) {",
+                "  pm.collectionVariables.set('invitationUrl', res.invitation);",
+                "  console.log('invitationUrl (verifier) guardada');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "3.2 Holder - Recibir invitación (del Verifier)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitationUrl\": \"{{invitationUrl}}\"\n}"
+            },
+            "url": "{{holder_base}}/receive-invitation",
+            "description": "Holder recibe invitación del Verifier y establece conexión. Esperar ~5s antes del siguiente paso."
+          }
+        },
+        {
+          "name": "3.3 Verifier - Listar conexiones",
+          "request": {
+            "method": "GET",
+            "url": "{{verifier_base}}/connections",
+            "description": "Obtener connectionId del Verifier hacia el Holder. Ejecutar tras 3.2."
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.connections && res.connections.length > 0) {",
+                "  const c = res.connections.find(x => x.state === 'completed') || res.connections[0];",
+                "  pm.collectionVariables.set('connectionId', c.id);",
+                "  console.log('connectionId (verifier) guardado para request-proof');",
+                "} else {",
+                "  console.log('Sin conexiones. Esperar tras receive-invitation (3.2).');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "3.4 Verifier - Solicitar proof",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"connectionId\": \"{{connectionId}}\"\n}"
+            },
+            "url": "{{verifier_base}}/request-proof",
+            "description": "Verifier envía solicitud de prueba. El Holder selecciona credenciales y envía presentación automáticamente. Verificar en consola Verifier/Holder el ASCII art (VERIFIED true/false)."
+          }
+        },
+        {
+          "name": "3.5 Verifier - Listar proofs",
+          "request": {
+            "method": "GET",
+            "url": "{{verifier_base}}/proofs",
+            "description": "Lista intercambios de proof (estado, id) para verificar resultado."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Issuer Service (puerto 3000)",
+      "item": [
+        {
+          "name": "Health",
+          "request": { "method": "GET", "url": "{{issuer_base}}/health" }
+        },
+        {
+          "name": "Debug (DID, endpoint)",
+          "request": { "method": "GET", "url": "{{issuer_base}}/debug" }
+        },
+        {
+          "name": "Create invitation",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{issuer_base}}/create-invitation"
+          }
+        },
+        {
+          "name": "List connections",
+          "request": { "method": "GET", "url": "{{issuer_base}}/connections", "description": "Lista conexiones con id, holderDid, issuerDid, theirLabel, state." }
+        },
+        {
+          "name": "Get connection by id",
+          "request": { "method": "GET", "url": "{{issuer_base}}/connection/{{connectionId}}", "description": "Obtiene una conexión por ID con holderDid, issuerDid, theirLabel, state." }
+        },
+        {
+          "name": "Offer credential",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"connectionId\": \"{{connectionId}}\",\n  \"credential\": {\n    \"credentialSubject\": { \"id\": \"{{holderDid}}\", \"name\": \"Test\" },\n    \"type\": [\"GenericCredential\"]\n  }\n}"
+            },
+            "url": "{{issuer_base}}/offer-credential"
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Holder Service (puerto 9005)",
+      "item": [
+        {
+          "name": "Health",
+          "request": { "method": "GET", "url": "{{holder_base}}/health" }
+        },
+        {
+          "name": "Receive invitation",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitationUrl\": \"{{invitationUrl}}\"\n}"
+            },
+            "url": "{{holder_base}}/receive-invitation"
+          }
+        },
+        {
+          "name": "List connections",
+          "request": { "method": "GET", "url": "{{holder_base}}/connections" }
+        },
+        {
+          "name": "Propose credential",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"connectionId\": \"{{connectionId}}\",\n  \"credentialSubject\": { \"name\": \"Test\" },\n  \"type\": [\"GenericCredential\"]\n}"
+            },
+            "url": "{{holder_base}}/propose-credential"
+          }
+        },
+        {
+          "name": "List credentials",
+          "request": { "method": "GET", "url": "{{holder_base}}/credentials", "description": "Lista todas las credenciales con detalle (id, type, issuer, credentialSubject, credential)." }
+        }
+      ]
+    },
+    {
+      "name": "6. Verifier Service (puerto 9004)",
+      "item": [
+        {
+          "name": "Health",
+          "request": { "method": "GET", "url": "{{verifier_base}}/health" }
+        },
+        {
+          "name": "Create invitation",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{verifier_base}}/create-invitation"
+          }
+        },
+        {
+          "name": "List connections",
+          "request": { "method": "GET", "url": "{{verifier_base}}/connections", "description": "Lista conexiones del verifier (para request-proof)." }
+        },
+        {
+          "name": "Request proof",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"connectionId\": \"{{connectionId}}\"\n}"
+            },
+            "url": "{{verifier_base}}/request-proof",
+            "description": "Envía solicitud de prueba al holder. Requiere connectionId de una conexión verifier-holder."
+          }
+        },
+        {
+          "name": "List proofs",
+          "request": { "method": "GET", "url": "{{verifier_base}}/proofs", "description": "Lista intercambios de proof (para debug)." }
+        }
+      ]
+    },
+    {
+      "name": "7. Storage Service (puerto 4002)",
+      "item": [
+        {
+          "name": "Health",
+          "request": { "method": "GET", "url": "{{storage_base}}/health" }
+        },
+        {
+          "name": "Save record",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"TestRecord\",\n  \"id\": \"test-1\",\n  \"data\": { \"foo\": \"bar\" }\n}"
+            },
+            "url": "{{storage_base}}/records"
+          }
+        },
+        {
+          "name": "Get record by path",
+          "request": { "method": "GET", "url": "{{storage_base}}/records/TestRecord/test-1" }
+        },
+        {
+          "name": "List records by type",
+          "request": { "method": "GET", "url": "{{storage_base}}/records/ConnectionRecord" }
+        },
+        {
+          "name": "Query records",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"ConnectionRecord\",\n  \"query\": { \"state\": \"completed\" }\n}"
+            },
+            "url": "{{storage_base}}/records/query"
+          }
+        },
+        {
+          "name": "Get record by body (IDs largos)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"ConnectionRecord\",\n  \"id\": \"did:peer:4xxx\"\n}"
+            },
+            "url": "{{storage_base}}/records/get"
+          }
+        },
+        {
+          "name": "Debug OOB invitations",
+          "request": { "method": "GET", "url": "{{storage_base}}/debug/oob-invitations" }
+        },
+        {
+          "name": "Debug DID keys",
+          "request": { "method": "GET", "url": "{{storage_base}}/debug/did-keys" }
+        }
+      ]
+    },
+    {
+      "name": "8. VDR Service (puerto 4003)",
+      "item": [
+        {
+          "name": "Health",
+          "request": { "method": "GET", "url": "{{vdr_base}}/health" }
+        },
+        {
+          "name": "Register DID",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"did:custom:abc123\",\n  \"document\": {\n    \"id\": \"did:custom:abc123\",\n    \"verificationMethod\": [],\n    \"service\": []\n  }\n}"
+            },
+            "url": "{{vdr_base}}/did"
+          }
+        },
+        {
+          "name": "Resolve DID",
+          "request": { "method": "GET", "url": "{{vdr_base}}/did/did:custom:abc123" }
+        },
+        {
+          "name": "DID Document (did.json)",
+          "request": { "method": "GET", "url": "{{vdr_base}}/did:custom:abc123/did.json" }
+        },
+        {
+          "name": "Delete DID",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"id\": \"did:custom:abc123\"\n}" },
+            "url": "{{vdr_base}}/did/delete"
+          }
+        },
+        {
+          "name": "Status - Create list",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"issuerId\": \"did:custom:issuer1\"\n}" },
+            "url": "{{vdr_base}}/status/list"
+          }
+        },
+        {
+          "name": "Status - Get list",
+          "request": { "method": "GET", "url": "{{vdr_base}}/status/list/:listId" }
+        },
+        {
+          "name": "Status - Allocate index",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{vdr_base}}/status/list/:listId/allocate"
+          }
+        },
+        {
+          "name": "Status - Is revoked",
+          "request": { "method": "GET", "url": "{{vdr_base}}/status/revoked/:listId/:index" }
+        }
+      ]
+    },
+    {
+      "name": "9. KMS Service (puerto 4001)",
+      "item": [
+        {
+          "name": "Health",
+          "request": { "method": "GET", "url": "{{kms_base}}/health" }
+        },
+        {
+          "name": "Keys debug",
+          "request": { "method": "GET", "url": "{{kms_base}}/keys-debug" }
+        },
+        {
+          "name": "Create key",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keyId\": \"test-key-1\",\n  \"type\": { \"kty\": \"OKP\", \"crv\": \"Ed25519\" }\n}"
+            },
+            "url": "{{kms_base}}/keys"
+          }
+        },
+        {
+          "name": "Get public key",
+          "request": { "method": "GET", "url": "{{kms_base}}/keys/test-key-1" }
+        }
+      ]
+    }
+  ]
+}

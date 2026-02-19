@@ -9,21 +9,21 @@
     "start": "ts-node src/main.ts"
   },
   "dependencies": {
+    "@credo-ts/core": "*",
+    "@credo-ts/didcomm": "*",
+    "@credo-ts/node": "*",
+    "@digitalbazaar/vc": "^7.3.0",
     "@nestjs/common": "^9.0.0",
     "@nestjs/core": "^9.0.0",
     "@nestjs/platform-express": "^9.0.0",
+    "node-fetch": "^2.6.7",
     "reflect-metadata": "^0.1.13",
-    "@credo-ts/core": "*",
-    "@credo-ts/node": "*",
-    "@credo-ts/didcomm": "*",
-    "sqlite3": "^5.1.6",
     "sqlite": "^4.1.2",
-    "node-fetch": "^2.6.7"
+    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
+    "@types/node": "^18.0.0",
     "ts-node": "^10.9.1",
-    "typescript": "^5.3.0",
-    "@types/node": "^18.0.0"
+    "typescript": "^5.3.0"
   }
 }
-

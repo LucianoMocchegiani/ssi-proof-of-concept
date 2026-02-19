@@ -60,7 +60,7 @@ El archivo `[TICKET-ID]_pr-description_[FECHA-HORA].md` generado debe contener l
 ### storage-service (si aplica)
 - Cambio 1
 
-### did-service (si aplica)
+### vdr-service (si aplica)
 - Cambio 1
 
 ### issuer-service (si aplica)
@@ -158,7 +158,7 @@ El archivo debe guardarse como `[TICKET-ID]_pr-description_[FECHA-HORA].md` en l
 - Scopes comunes: `kms`, `storage`, `did`, `issuer`, `holder`, `verifier`, `docker`
 
 ### Estructura del Proyecto
-- **Servicios base**: kms-service, storage-service, did-service (NestJS + SQLite)
+- **Servicios base**: kms-service, storage-service, vdr-service (NestJS + SQLite)
 - **Agentes**: issuer-service, holder-service, verifier-service (NestJS + Credo-TS)
 - **Persistencia**: SQLite (POC)
 - **Containerización**: Docker + Docker Compose

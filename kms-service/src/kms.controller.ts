@@ -1,63 +1,86 @@
-import { Controller, Post, Body, Get, Param, Delete } from '@nestjs/common'
+/** Controller REST del KMS. Expone endpoints para createKey, getPublicKey, sign, verify, etc. */
+import { Controller, Get, Post, Delete, Param, Body, HttpCode, HttpStatus, NotFoundException } from '@nestjs/common'
 import { KmsService } from './kms.service'
 
-/**
- * Controller del KMS (Key Management Service).
- *
- * Expone API REST para gestión de claves: crear, obtener, importar, eliminar,
- * cifrar y descifrar. Usado por issuer, holder y verifier para operaciones
- * criptográficas sin Credo.
- */
 @Controller()
 export class KmsController {
-  constructor(private readonly svc: KmsService) {}
+  constructor(private readonly kms: KmsService) {}
 
-  /** Health check. */
   @Get('health')
   health() {
-    return { ok: true }
+    return { status: 'ok' }
   }
 
-  /** Crea un par de claves Ed25519 y lo persiste. Retorna keyId y publicJwk. */
+  /** DEBUG: Lista claves con thumbprints. Comparar tpX25519 con el kid del JWE (ej. 58tLSzsbw...). */
+  @Get('keys-debug')
+  async listKeysDebug() {
+    return this.kms.listKeysDebug()
+  }
+
   @Post('keys')
-  async createKey(@Body() body: { keyId?: string }) {
-    return this.svc.createKey(body.keyId)
+  async createKey(@Body() body: { keyId?: string; type?: { kty?: string; crv?: string } }) {
+    const type =
+      body.type?.kty === 'OKP' && body.type?.crv === 'Ed25519' ? 'Ed25519' :
+      (body.type as any)?.keyType === 'Bls12381G2' ? 'Bls12381G2' : 'Ed25519'
+    return this.kms.createKey(body.keyId, type)
   }
 
-  /** Obtiene la clave pública por ID. Retorna null si no existe. */
   @Get('keys/:id')
-  async getKey(@Param('id') id: string) {
-    return this.svc.getPublicKey(id)
+  async getPublicKey(@Param('id') id: string) {
+    const pk = await this.kms.getPublicKey(id)
+    if (!pk) {
+      console.error('[kms] getPublicKey NOT FOUND:', id.substring(0, 50) + (id.length > 50 ? '...' : ''))
+      throw new NotFoundException(`Key ${id} not found`)
+    }
+    return pk
   }
 
-  /** Importa una clave privada en formato JWK. */
   @Post('keys/import')
   async importKey(@Body() body: { privateJwk: any }) {
-    return this.svc.importKey(body.privateJwk)
+    return this.kms.importKey(body.privateJwk)
   }
 
-  /** Elimina una clave por ID. */
   @Delete('keys/:id')
   async deleteKey(@Param('id') id: string) {
-    return this.svc.deleteKey(id)
+    await this.kms.deleteKey(id)
+    return { deleted: id }
   }
 
-  /** Genera bytes aleatorios (para nonces, etc.). */
   @Post('random')
-  async random(@Body() body: { length?: number }) {
-    return { random: this.svc.random(body.length || 32).toString('base64') }
+  random(@Body() body: { length?: number }) {
+    const len = body?.length ?? 32
+    return { random: this.kms.random(len).toString('base64') }
   }
 
-  /** Cifra datos (actualmente pass-through; extensible con X25519). */
+  @Post('sign')
+  @HttpCode(HttpStatus.OK)
+  async sign(@Body() body: { keyId: string; data: string }) {
+    const sig = await this.kms.sign(body.keyId, body.data)
+    return { signature: sig }
+  }
+
+  @Post('verify')
+  @HttpCode(HttpStatus.OK)
+  async verify(@Body() body: { keyId: string; data: string; signature: string }) {
+    const valid = await this.kms.verify(body.keyId, body.data, body.signature)
+    return { valid }
+  }
+
   @Post('encrypt')
   async encrypt(@Body() body: any) {
-    return this.svc.encrypt(body)
+    return this.kms.encrypt(body)
   }
 
-  /** Descifra datos. */
   @Post('decrypt')
   async decrypt(@Body() body: any) {
-    return this.svc.decrypt(body.encrypted)
+    return this.kms.decrypt(body)
+  }
+
+  @Post('sign-bbs')
+  @HttpCode(HttpStatus.OK)
+  async signBbs(@Body() body: { keyId: string; data: string }) {
+    const data = typeof body.data === 'string' ? body.data : Buffer.from(body.data).toString('base64')
+    const sig = await this.kms.signBbs(body.keyId, data)
+    return { signature: sig }
   }
 }
-

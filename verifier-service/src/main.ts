@@ -1,31 +1,41 @@
 import 'reflect-metadata'
+import { Logger } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from './app.module'
 import { envConfig } from './config'
 import { initializeVerifierAgent, ensureVerifierDid } from './agent/agent-verifier'
 import { setVerifierAgent } from './agent/agent-store'
 import { setVerifierDid } from './agent/verifier-did-store'
+import { WebSocketServer } from 'ws'
 
-/** Bootstrap: inicializa agente y DID, luego levanta HTTP. */
+const logger = new Logger('Verifier')
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection', reason)
+})
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception', err)
+})
+
+/** Bootstrap: Nest maneja HTTP, WebSocket DIDComm se adjunta al mismo servidor. */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
   const port = envConfig.port
 
-  const agent = await initializeVerifierAgent()
+  await app.listen(port)
+  const httpServer = app.getHttpServer()
+  const wsServer = new WebSocketServer({ server: httpServer })
+
+  const agent = await initializeVerifierAgent(wsServer)
   setVerifierAgent(agent)
   const did = await ensureVerifierDid(agent)
   setVerifierDid(did)
-  // eslint-disable-next-line no-console
-  console.log('Verifier agent initialized', { did })
-
-  await app.listen(port)
-  // eslint-disable-next-line no-console
-  console.log(`Verifier service listening on ${port}`)
+  logger.log(`Agent initialized did=${did}`)
+  logger.log(`Listening on ${port} (API + DIDComm WebSocket)`)
 }
 
 bootstrap().catch(err => {
-  // eslint-disable-next-line no-console
-  console.error('Bootstrap failed', err)
+  logger.error('Bootstrap failed', err)
   process.exit(1)
 })
 
