@@ -1,5 +1,6 @@
 import { AgentContext, Kms } from '@credo-ts/core'
 import type { Uint8ArrayBuffer } from '@credo-ts/core'
+import { randomBytes } from 'crypto'
 
 /**
  * Adaptador KMS remoto. Traduce llamadas de Credo a HTTP hacia kms-service.
@@ -145,16 +146,12 @@ export class RemoteKeyManagementService implements Kms.KeyManagementService {
   public async decrypt(_agentContext: AgentContext, options: Kms.KmsDecryptOptions): Promise<Kms.KmsDecryptReturn> {
     const opts = options as any
     const enc = opts.encrypted instanceof Uint8Array ? opts.encrypted : Uint8Array.from(Buffer.from(opts.encrypted as any))
-    const encryption: any = opts.encryption ? { ...opts.encryption } : undefined
-    if (encryption?.aad) encryption.aad = Buffer.from(encryption.aad).toString('base64')
-    const body: any = {
-      key: opts.key,
-      encryption,
-      encrypted: Buffer.from(enc).toString('base64'),
-    }
-    if (opts.iv) body.iv = Buffer.from(opts.iv).toString('base64')
-    if (opts.tag) body.tag = Buffer.from(opts.tag).toString('base64')
-
+    const dec: any = opts.decryption ?? {}
+    const encryption: any = dec.algorithm ? { algorithm: dec.algorithm } : undefined
+    if (dec.aad && encryption) encryption.aad = Buffer.from(dec.aad).toString('base64')
+    const body: any = { key: opts.key, encryption, encrypted: Buffer.from(enc).toString('base64') }
+    if (dec.iv) body.iv = Buffer.from(dec.iv).toString('base64')
+    if (dec.tag) body.tag = Buffer.from(dec.tag).toString('base64')
     const r = await this.fetch<{ data: any }>('/decrypt', { method: 'POST', body: JSON.stringify(body) })
     const raw = r.data
     const data = typeof raw === 'string' ? Buffer.from(raw, 'base64') : Buffer.from(raw || [])
@@ -162,9 +159,6 @@ export class RemoteKeyManagementService implements Kms.KeyManagementService {
   }
 
   public randomBytes(_agentContext: AgentContext, options: Kms.KmsRandomBytesOptions) {
-    return this.fetch<{ random: string }>('/random', {
-      method: 'POST',
-      body: JSON.stringify({ length: options.length }),
-    }).then((r) => new Uint8Array(Buffer.from(r.random, 'base64'))) as any
+    return randomBytes(options.length)
   }
 }

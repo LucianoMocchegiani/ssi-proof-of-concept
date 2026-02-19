@@ -272,7 +272,7 @@ export class KmsService {
     if (theirPublicX25519.length !== 32) throw new Error('encrypt: externalPublicJwk.x must be 32 bytes')
 
     let x25519Secret: Uint8Array
-    let prependEphemeralPub: Buffer | undefined
+    let isAnoncrypt = false
 
     if (keyId) {
       const db = await this.dbPromise
@@ -292,25 +292,22 @@ export class KmsService {
       if (!converted) throw new Error('encrypt: failed to convert Ed25519 to X25519')
       x25519Secret = converted as Uint8Array
     } else {
-      // Anoncrypt: clave efímera (Credo no pasa keyId en la primera llamada)
+      isAnoncrypt = true
       const ephemeral = nacl.box.keyPair()
       x25519Secret = ephemeral.secretKey
-      prependEphemeralPub = Buffer.from(ephemeral.publicKey)
+      var ephemeralPub = Buffer.from(ephemeral.publicKey)
     }
 
     const nonce = randomBytes(24)
     const boxed = nacl.box(data, nonce, theirPublicX25519 as Uint8Array, x25519Secret)
     if (!boxed) throw new Error('encrypt: nacl.box failed')
 
-    let encrypted: Buffer
-    if (prependEphemeralPub) {
-      encrypted = Buffer.concat([prependEphemeralPub, Buffer.from(boxed)])
-    } else {
-      encrypted = Buffer.from(boxed)
+    if (isAnoncrypt) {
+      const encrypted = Buffer.concat([ephemeralPub!, nonce, Buffer.from(boxed)])
+      return { encrypted: encrypted.toString('base64'), iv: undefined, tag: undefined }
     }
-
     return {
-      encrypted: encrypted.toString('base64'),
+      encrypted: Buffer.from(boxed).toString('base64'),
       iv: nonce.toString('base64'),
       tag: undefined,
     }
@@ -323,14 +320,15 @@ export class KmsService {
 
     const iv = randomBytes(12)
     const aad = encOpts.aad ? this.b64ToBuf(encOpts.aad) : undefined
-    const cipher = createCipheriv('chacha20-poly1305', key, iv)
+    const cipher = createCipheriv('chacha20-poly1305', key, iv, { authTagLength: 16 } as any)
     if (aad) (cipher as any).setAAD(aad)
 
     const encrypted = Buffer.concat([cipher.update(data), cipher.final()])
+    const tag = (cipher as any).getAuthTag() as Buffer
     return {
       encrypted: encrypted.toString('base64'),
       iv: iv.toString('base64'),
-      tag: undefined,
+      tag: tag.toString('base64'),
     }
   }
 
@@ -353,7 +351,6 @@ export class KmsService {
     const algorithm = encOpts.algorithm || 'XSALSA20-POLY1305'
 
     if (key?.keyAgreement) {
-      if (!iv || iv.length !== 24) throw new Error('decrypt: iv (24 bytes) required for keyAgreement')
       return this.decryptKeyAgreement(key.keyAgreement, encrypted, iv)
     }
     if (key?.privateJwk?.kty === 'oct') {
@@ -362,13 +359,9 @@ export class KmsService {
     throw new Error('decrypt: key.keyAgreement or key.privateJwk (oct) required')
   }
 
-  private async decryptKeyAgreement(keyAgreement: any, encrypted: Uint8Array, nonce: Buffer) {
+  private async decryptKeyAgreement(keyAgreement: any, encrypted: Uint8Array, nonce: Buffer | null) {
     const keyId = keyAgreement.keyId
-    const externalPublicJwk = keyAgreement.externalPublicJwk
-    if (!keyId || !externalPublicJwk?.x || nonce.length !== 24) {
-      throw new Error('decrypt: keyAgreement.keyId, externalPublicJwk, iv (24 bytes) required')
-    }
-    const theirPublicX25519 = Buffer.from(externalPublicJwk.x, 'base64url') as Uint8Array
+    if (!keyId) throw new Error('decrypt: keyAgreement.keyId required')
 
     const db = await this.dbPromise
     const resolvedKeyId = await this.resolveKeyId(keyId)
@@ -385,17 +378,21 @@ export class KmsService {
     const x25519Secret = ed2curve.convertSecretKey(ed25519Secret)
     if (!x25519Secret) throw new Error('decrypt: failed to convert Ed25519 to X25519')
 
-    let boxed = encrypted
-    if (encrypted.length > 32) {
-      const tryStrip = encrypted.subarray(32)
-      const openedStrip = nacl.box.open(tryStrip, nonce as Uint8Array, theirPublicX25519, x25519Secret as Uint8Array)
-      if (openedStrip) {
-        return { data: Buffer.from(openedStrip).toString('base64') }
-      }
-    }
-    const opened = nacl.box.open(boxed, nonce as Uint8Array, theirPublicX25519, x25519Secret as Uint8Array)
-    if (!opened) throw new Error('decrypt: nacl.box.open failed')
+    const externalPublicJwk = keyAgreement.externalPublicJwk
 
+    if (externalPublicJwk?.x && nonce && nonce.length === 24) {
+      const theirPublicX25519 = Buffer.from(externalPublicJwk.x, 'base64url') as Uint8Array
+      const opened = nacl.box.open(encrypted, nonce as Uint8Array, theirPublicX25519, x25519Secret as Uint8Array)
+      if (!opened) throw new Error('decrypt: nacl.box.open failed (authcrypt)')
+      return { data: Buffer.from(opened).toString('base64') }
+    }
+
+    if (encrypted.length <= 56) throw new Error('decrypt: encrypted too short for anoncrypt (need 32+24+data)')
+    const ephemeralPub = encrypted.subarray(0, 32)
+    const extractedNonce = encrypted.subarray(32, 56)
+    const boxed = encrypted.subarray(56)
+    const opened = nacl.box.open(boxed, extractedNonce, ephemeralPub, x25519Secret as Uint8Array)
+    if (!opened) throw new Error('decrypt: nacl.box.open failed (anoncrypt)')
     return { data: Buffer.from(opened).toString('base64') }
   }
 
@@ -405,7 +402,7 @@ export class KmsService {
     const key = Buffer.from(privateJwk.k, 'base64url')
     const ivBuf = iv as Buffer
 
-    const decipher = createDecipheriv('chacha20-poly1305', key, ivBuf)
+    const decipher = createDecipheriv('chacha20-poly1305', key, ivBuf, { authTagLength: 16 } as any)
     const aad = encOpts.aad ? this.b64ToBuf(encOpts.aad) : undefined
     if (aad) (decipher as any).setAAD(aad)
     if (tag) decipher.setAuthTag(tag)
