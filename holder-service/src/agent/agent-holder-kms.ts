@@ -1,25 +1,25 @@
 import type { DependencyManager } from '@credo-ts/core'
 import { Kms } from '@credo-ts/core'
 import { envConfig } from '../config'
-import { MockKeyManagementService } from '../kms/inmemory-kms.adapter'
-import { RemoteKeyManagementService } from '../kms/remote-kms.adapter'
+import { InternalKeyManagementService } from '../kms/internal-kms.adapter'
+import { ExternalKeyManagementService } from '../kms/external-kms.adapter'
 
 /** Registra KMS en el agente holder. */
 export function registerKmsConfig(dependencyManager: DependencyManager) {
-  if (envConfig.useRemoteKms) {
+  if (envConfig.kmsMode === 'external') {
     dependencyManager.registerInstance(
       Kms.KeyManagementModuleConfig,
       new Kms.KeyManagementModuleConfig({
-        backends: [new (RemoteKeyManagementService as any)(envConfig.remoteKmsUrl)],
-        defaultBackend: (RemoteKeyManagementService as any).backend,
+        backends: [new (ExternalKeyManagementService as any)(envConfig.externalKmsUrl)],
+        defaultBackend: (ExternalKeyManagementService as any).backend,
       })
     )
   } else {
     dependencyManager.registerInstance(
       Kms.KeyManagementModuleConfig,
       new Kms.KeyManagementModuleConfig({
-        backends: [new MockKeyManagementService()],
-        defaultBackend: MockKeyManagementService.backend,
+        backends: [new InternalKeyManagementService(envConfig.internalKmsSqlitePath)],
+        defaultBackend: InternalKeyManagementService.backend,
       })
     )
   }
@@ -27,14 +27,14 @@ export function registerKmsConfig(dependencyManager: DependencyManager) {
 
 /** Construye KeyManagementModule según env. */
 export function buildKeyManagementModule(): any {
-  if (envConfig.useRemoteKms) {
+  if (envConfig.kmsMode === 'external') {
     return new Kms.KeyManagementModule({
-      backends: [new (RemoteKeyManagementService as any)(envConfig.remoteKmsUrl)],
-      defaultBackend: (RemoteKeyManagementService as any).backend,
+      backends: [new (ExternalKeyManagementService as any)(envConfig.externalKmsUrl)],
+      defaultBackend: (ExternalKeyManagementService as any).backend,
     }) as any
   }
   return new Kms.KeyManagementModule({
-    backends: [new MockKeyManagementService()],
-    defaultBackend: MockKeyManagementService.backend,
+    backends: [new InternalKeyManagementService(envConfig.internalKmsSqlitePath)],
+    defaultBackend: InternalKeyManagementService.backend,
   }) as any
 }

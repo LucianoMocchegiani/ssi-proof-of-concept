@@ -72,7 +72,7 @@ function jwkToX25519Thumbprint(jwk: { kty: string; crv?: string; x?: string }): 
  * Servicio de gestión de claves.
  *
  * Crea pares Ed25519 o Bls12381G2, importa claves JWK, persiste en SQLite.
- * Los agentes Credo lo usan vía RemoteKeyManagementService.
+ * Los agentes Credo lo usan vía ExternalKeyManagementService.
  */
 @Injectable()
 export class KmsService {

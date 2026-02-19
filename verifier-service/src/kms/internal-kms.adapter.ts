@@ -1,26 +1,52 @@
 import { AgentContext, Kms, utils } from '@credo-ts/core'
 import type { Uint8ArrayBuffer } from '@credo-ts/core'
 import { randomBytes, generateKeyPairSync, createPrivateKey, sign } from 'crypto'
+import Database from 'better-sqlite3'
+import * as path from 'path'
+import * as fs from 'fs'
 
 /**
- * Adaptador KMS en memoria para POC.
- * Implementa la interfaz de Credo KeyManagementService.
- * - Soporta creación de claves OKP/Ed25519
- * - Almacena material privado en memoria (NO para producción)
+ * KMS interno: cripto local (Node.js crypto) + persistencia SQLite.
+ * Las claves privadas viven en el proceso del agente, no salen por red.
  */
-export class MockKeyManagementService implements Kms.KeyManagementService {
-  public static readonly backend = 'mock'
-  public readonly backend = MockKeyManagementService.backend
+export class InternalKeyManagementService implements Kms.KeyManagementService {
+  public static readonly backend = 'internal'
+  public readonly backend = InternalKeyManagementService.backend
 
-  private keys = new Map<string, { privateJwk: any; publicJwk: any }>()
+  private db: Database.Database
+
+  constructor(sqlitePath?: string) {
+    const dbPath = sqlitePath || process.env.INTERNAL_KMS_SQLITE_PATH || './data/internal-kms.sqlite'
+    const dir = path.dirname(dbPath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    this.db = new Database(dbPath)
+    this.db.pragma('journal_mode = WAL')
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS keys (
+        id TEXT PRIMARY KEY,
+        publicJwk TEXT NOT NULL,
+        privateJwk TEXT NOT NULL
+      )
+    `)
+  }
+
+  private getKey(keyId: string): { privateJwk: any; publicJwk: any } | null {
+    const row = this.db.prepare('SELECT publicJwk, privateJwk FROM keys WHERE id = ?').get(keyId) as any
+    if (!row) return null
+    return { publicJwk: JSON.parse(row.publicJwk), privateJwk: JSON.parse(row.privateJwk) }
+  }
+
+  private saveKey(keyId: string, publicJwk: any, privateJwk: any) {
+    this.db.prepare('INSERT OR REPLACE INTO keys (id, publicJwk, privateJwk) VALUES (?, ?, ?)').run(
+      keyId,
+      JSON.stringify(publicJwk),
+      JSON.stringify(privateJwk),
+    )
+  }
 
   public isOperationSupported(_agentContext: AgentContext, operation: Kms.KmsOperation): boolean {
-    // Debug: log operations to help diagnose selection issues in POC
-    // eslint-disable-next-line no-console
-    console.log('[MockKMS] isOperationSupported called with operation:', operation)
     if (operation.operation === 'randomBytes') return true
     if (operation.operation === 'createKey') {
-      // If type is not provided, accept createKey by default for POC.
       const type = (operation as any).type
       if (!type) return true
       return type.kty === 'OKP' && type.crv === 'Ed25519'
@@ -32,7 +58,7 @@ export class MockKeyManagementService implements Kms.KeyManagementService {
   }
 
   public async getPublicKey(_agentContext: AgentContext, keyId: string) {
-    const entry = this.keys.get(keyId)
+    const entry = this.getKey(keyId)
     return entry ? entry.publicJwk : null
   }
 
@@ -40,43 +66,34 @@ export class MockKeyManagementService implements Kms.KeyManagementService {
     _agentContext: AgentContext,
     options: Kms.KmsCreateKeyOptions<Type>
   ): Promise<Kms.KmsCreateKeyReturn<Type>> {
-    // only implement OKP/Ed25519 for POC
     if (options.type.kty !== 'OKP' || (options.type as any).crv !== 'Ed25519') {
-      throw new Error('Only OKP Ed25519 supported in MockKeyManagementService')
+      throw new Error('Only OKP Ed25519 supported in InternalKeyManagementService')
     }
-
     const { publicKey, privateKey } = generateKeyPairSync('ed25519')
     const kid = options.keyId ?? utils.uuid()
-
-    // Export proper JWKs (Node supports JWK export for ed25519)
     const publicJwk = publicKey.export({ format: 'jwk' }) as any
     const privateJwk = privateKey.export({ format: 'jwk' }) as any
-
-    // Ensure kid present
     publicJwk.kid = kid
     privateJwk.kid = kid
-
-    this.keys.set(kid, { privateJwk, publicJwk })
-
-    return {
-      keyId: kid,
-      publicJwk: publicJwk,
-    } as unknown as Kms.KmsCreateKeyReturn<Type>
+    this.saveKey(kid, publicJwk, privateJwk)
+    return { keyId: kid, publicJwk } as unknown as Kms.KmsCreateKeyReturn<Type>
   }
 
   public async importKey<Jwk extends Kms.KmsJwkPrivate>(_agentContext: AgentContext, options: Kms.KmsImportKeyOptions<Jwk>) {
     const kid = options.privateJwk.kid ?? utils.uuid()
     const publicJwk = Kms.publicJwkFromPrivateJwk(options.privateJwk as any)
     publicJwk.kid = kid
-    this.keys.set(kid, { privateJwk: options.privateJwk, publicJwk })
+    this.saveKey(kid, publicJwk, options.privateJwk)
     return { keyId: kid, publicJwk } as any
   }
 
   public async deleteKey(_agentContext: AgentContext, options: Kms.KmsDeleteKeyOptions) {
-    return this.keys.delete(options.keyId)
+    const result = this.db.prepare('DELETE FROM keys WHERE id = ?').run(options.keyId)
+    return result.changes > 0
   }
+
   public async sign(_agentContext: AgentContext, options: Kms.KmsSignOptions): Promise<Kms.KmsSignReturn> {
-    const entry = this.keys.get(options.keyId)
+    const entry = this.getKey(options.keyId)
     if (!entry) throw new Kms.KeyManagementError(`Key ${options.keyId} not found`)
     const { algorithm } = options
     if (algorithm !== 'EdDSA' && algorithm !== 'Ed25519') {
@@ -92,7 +109,7 @@ export class MockKeyManagementService implements Kms.KeyManagementService {
     const { key, algorithm, data, signature } = options
     const publicJwk =
       'keyId' in key && key.keyId
-        ? await this.getPublicKey(_agentContext, key.keyId)
+        ? (this.getKey(key.keyId)?.publicJwk ?? null)
         : (key as { publicJwk: any }).publicJwk
     if (!publicJwk) throw new Kms.KeyManagementError('Public key not found for verify')
     if (algorithm !== 'EdDSA' && algorithm !== 'Ed25519') {
@@ -107,35 +124,13 @@ export class MockKeyManagementService implements Kms.KeyManagementService {
   }
 
   public async encrypt(_agentContext: AgentContext, _options: Kms.KmsEncryptOptions): Promise<Kms.KmsEncryptReturn> {
-    // POC: insecure helper to satisfy framework expectations.
-    // We do NOT perform real encryption here; we return the plaintext as "encrypted"
-    // and include dummy iv/tag values when required by the algorithm.
-    // WARNING: insecure, only for local testing.
     const data = (_options.data instanceof Uint8Array ? (_options.data as Uint8Array) : Uint8Array.from(Buffer.from(_options.data as any))) as unknown as Uint8ArrayBuffer
-
-    const encAlg = _options.encryption?.algorithm
-    let iv: Uint8ArrayBuffer | undefined = undefined
-    let tag: Uint8ArrayBuffer | undefined = undefined
-
-    if (encAlg === 'A128GCM' || encAlg === 'A192GCM' || encAlg === 'A256GCM') {
-      iv = randomBytes(12) as unknown as Uint8ArrayBuffer
-      tag = randomBytes(16) as unknown as Uint8ArrayBuffer
-    } else if (encAlg === 'C20P' || encAlg === 'XC20P' || encAlg === 'XSALSA20-POLY1305') {
-      iv = randomBytes(12) as unknown as Uint8ArrayBuffer
-      tag = randomBytes(16) as unknown as Uint8ArrayBuffer
-    } else {
-      iv = randomBytes(12) as unknown as Uint8ArrayBuffer
-    }
-
-    return {
-      encrypted: data,
-      iv,
-      tag,
-    }
+    const iv = randomBytes(12) as unknown as Uint8ArrayBuffer
+    const tag = randomBytes(16) as unknown as Uint8ArrayBuffer
+    return { encrypted: data, iv, tag }
   }
 
   public async decrypt(_agentContext: AgentContext, _options: Kms.KmsDecryptOptions): Promise<Kms.KmsDecryptReturn> {
-    // POC: passthrough decrypt that returns the encrypted bytes directly.
     const encrypted = (_options.encrypted instanceof Uint8Array ? (_options.encrypted as Uint8Array) : Uint8Array.from(Buffer.from(_options.encrypted as any))) as unknown as Uint8ArrayBuffer
     return { data: encrypted }
   }

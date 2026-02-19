@@ -3,12 +3,12 @@ import type { Uint8ArrayBuffer } from '@credo-ts/core'
 import { randomBytes } from 'crypto'
 
 /**
- * Adaptador KMS remoto. Traduce llamadas de Credo a HTTP hacia kms-service.
- * Soporta createKey, getPublicKey, sign, verify, encrypt/decrypt (stub).
+ * KMS externo: delega operaciones criptográficas al kms-service vía HTTP.
+ * Las claves privadas viven en el servicio externo, no en el proceso del agente.
  */
-export class RemoteKeyManagementService implements Kms.KeyManagementService {
-  public static readonly backend = 'remote'
-  public readonly backend = RemoteKeyManagementService.backend
+export class ExternalKeyManagementService implements Kms.KeyManagementService {
+  public static readonly backend = 'external'
+  public readonly backend = ExternalKeyManagementService.backend
 
   constructor(private readonly baseUrl: string) {}
 
@@ -129,23 +129,13 @@ export class RemoteKeyManagementService implements Kms.KeyManagementService {
     const opts = options as any
     if (opts.data === undefined && opts.plaintext !== undefined) opts.data = opts.plaintext
     if (opts.data === undefined || opts.data === null) {
-      console.error('[holder RemoteKMS] encrypt: options.data undefined. keys=', Object.keys(opts || {}))
       throw new Kms.KeyManagementError('KMS encrypt: options.data is required')
     }
     const data = options.data instanceof Uint8Array ? options.data : Uint8Array.from(Buffer.from(options.data as any))
     const encryption: any = opts.encryption ? { ...opts.encryption } : undefined
-    if (encryption?.aad) {
-      encryption.aad = Buffer.from(encryption.aad).toString('base64')
-    }
-    const body: any = {
-      key: opts.key,
-      encryption,
-      data: Buffer.from(data).toString('base64'),
-    }
-    const r = await this.fetch<{ encrypted: any; iv?: any; tag?: any }>('/encrypt', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    })
+    if (encryption?.aad) encryption.aad = Buffer.from(encryption.aad).toString('base64')
+    const body: any = { key: opts.key, encryption, data: Buffer.from(data).toString('base64') }
+    const r = await this.fetch<{ encrypted: any; iv?: any; tag?: any }>('/encrypt', { method: 'POST', body: JSON.stringify(body) })
     const enc = r.encrypted?.data ?? r.encrypted
     return {
       encrypted: (typeof enc === 'string' ? Buffer.from(enc, 'base64') : Buffer.from(enc)) as unknown as Uint8ArrayBuffer,

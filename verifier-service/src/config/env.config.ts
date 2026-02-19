@@ -11,8 +11,9 @@ export const envConfig = {
   didcommPort: Number(env.DIDCOMM_PORT || 9004),
   /** Base para links de invitación. Default: didcomm:// (sin host, solo ?oob=...). */
   invitationUrlPrefix: env.INVITATION_URL_PREFIX || 'didcomm://',
-  useRemoteKms: env.USE_REMOTE_KMS === 'true',
-  remoteKmsUrl: env.REMOTE_KMS_URL || 'http://localhost:4001',
+  kmsMode: (env.KMS_MODE || 'internal') as 'internal' | 'external',
+  externalKmsUrl: env.EXTERNAL_KMS_URL || 'http://localhost:4001',
+  internalKmsSqlitePath: env.INTERNAL_KMS_SQLITE_PATH || '/app/data/internal-kms.sqlite',
   useRemoteStorage: env.USE_REMOTE_STORAGE === 'true',
   remoteStorageUrl: env.REMOTE_STORAGE_URL || 'http://localhost:4002',
   vdrServiceUrl: env.VDR_SERVICE_URL || 'http://localhost:4003',

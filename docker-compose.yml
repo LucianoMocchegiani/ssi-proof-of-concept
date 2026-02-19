@@ -60,11 +60,14 @@ services:
       SERVICE_HOST: issuer-service
       DIDCOMM_ENDPOINT: ws://issuer-service:3000
       DIDCOMM_PORT: 3000
-      USE_REMOTE_KMS: "true"
-      REMOTE_KMS_URL: http://kms-service:4001
+      KMS_MODE: "internal"
+      EXTERNAL_KMS_URL: http://kms-service:4001
+      INTERNAL_KMS_SQLITE_PATH: /app/data/internal-kms.sqlite
       USE_REMOTE_STORAGE: "true"
       REMOTE_STORAGE_URL: http://storage-service:4002
       VDR_SERVICE_URL: http://vdr-service:4003
+    volumes:
+      - issuer-kms-data:/app/data
     depends_on:
       storage-service:
         condition: service_healthy
@@ -80,11 +83,14 @@ services:
       PORT: 9005
       SERVICE_HOST: holder-service
       DIDCOMM_ENDPOINT: ws://holder-service:9005
-      USE_REMOTE_KMS: "true"
-      REMOTE_KMS_URL: http://kms-service:4001
+      KMS_MODE: "internal"
+      EXTERNAL_KMS_URL: http://kms-service:4001
+      INTERNAL_KMS_SQLITE_PATH: /app/data/internal-kms.sqlite
       USE_REMOTE_STORAGE: "true"
       REMOTE_STORAGE_URL: http://storage-service:4002
       VDR_SERVICE_URL: http://vdr-service:4003
+    volumes:
+      - holder-kms-data:/app/data
     depends_on:
       storage-service:
         condition: service_healthy
@@ -101,11 +107,14 @@ services:
       DIDCOMM_PORT: 9004
       SERVICE_HOST: verifier-service
       DIDCOMM_ENDPOINT: ws://verifier-service:9004
-      USE_REMOTE_KMS: "true"
-      REMOTE_KMS_URL: http://kms-service:4001
+      KMS_MODE: "internal"
+      EXTERNAL_KMS_URL: http://kms-service:4001
+      INTERNAL_KMS_SQLITE_PATH: /app/data/internal-kms.sqlite
       USE_REMOTE_STORAGE: "true"
       REMOTE_STORAGE_URL: http://storage-service:4002
       VDR_SERVICE_URL: http://vdr-service:4003
+    volumes:
+      - verifier-kms-data:/app/data
     depends_on:
       storage-service:
         condition: service_healthy
@@ -117,3 +126,6 @@ volumes:
   kms-data:
   storage-data:
   vdr-data:
+  issuer-kms-data:
+  holder-kms-data:
+  verifier-kms-data:

@@ -3,12 +3,12 @@ import type { Uint8ArrayBuffer } from '@credo-ts/core'
 import { randomBytes } from 'crypto'
 
 /**
- * Adaptador KMS remoto. Traduce llamadas de Credo a HTTP hacia kms-service.
- * Soporta createKey, getPublicKey, sign, verify, encrypt/decrypt (stub).
+ * KMS externo: delega operaciones criptográficas al kms-service vía HTTP.
+ * Las claves privadas viven en el servicio externo, no en el proceso del agente.
  */
-export class RemoteKeyManagementService implements Kms.KeyManagementService {
-  public static readonly backend = 'remote'
-  public readonly backend = RemoteKeyManagementService.backend
+export class ExternalKeyManagementService implements Kms.KeyManagementService {
+  public static readonly backend = 'external'
+  public readonly backend = ExternalKeyManagementService.backend
 
   constructor(private readonly baseUrl: string) {}
 
@@ -127,7 +127,11 @@ export class RemoteKeyManagementService implements Kms.KeyManagementService {
 
   public async encrypt(_agentContext: AgentContext, options: Kms.KmsEncryptOptions): Promise<Kms.KmsEncryptReturn> {
     const opts = options as any
-    const data = opts.data instanceof Uint8Array ? opts.data : Uint8Array.from(Buffer.from(opts.data as any))
+    if (opts.data === undefined && opts.plaintext !== undefined) opts.data = opts.plaintext
+    if (opts.data === undefined || opts.data === null) {
+      throw new Kms.KeyManagementError('KMS encrypt: options.data is required')
+    }
+    const data = options.data instanceof Uint8Array ? options.data : Uint8Array.from(Buffer.from(options.data as any))
     const encryption: any = opts.encryption ? { ...opts.encryption } : undefined
     if (encryption?.aad) encryption.aad = Buffer.from(encryption.aad).toString('base64')
     const body: any = { key: opts.key, encryption, data: Buffer.from(data).toString('base64') }
