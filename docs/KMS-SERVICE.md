@@ -17,8 +17,8 @@ En este diseño, el KMS **reemplaza la parte de billetera/criptografía de Askar
 | **Obtener clave publica** | Si | GET /keys/:id retorna JWK publico |
 | **Firmar** | Si (Ed25519) | POST /sign con keyId y data (base64). Retorna signature (base64) |
 | **Verificar** | Si (Ed25519) | POST /verify con keyId, data, signature. Retorna { valid } |
-| **Cifrar** | Stub | encrypt() es pass-through (retorna datos sin cifrar) |
-| **Descifrar** | Stub | decrypt() es pass-through |
+| **Cifrar** | Si | encrypt() soporta ChaCha20-Poly1305 (simétrico) y X25519 key agreement (anoncrypt/authcrypt) |
+| **Descifrar** | Si | decrypt() soporta ChaCha20-Poly1305 y X25519 key agreement |
 | **Random bytes** | Si | POST /random; Credo usa crypto local, no llama al KMS |
 | **Importar clave** | Si | POST /keys/import con privateJwk |
 | **Borrar clave** | Si | DELETE /keys/:id |
@@ -47,7 +47,7 @@ Para DIDComm, Credo puede usar claves propias o del KMS segun el flujo. Nuestro 
 
 ## Como se usan las claves en el sistema
 
-> **Nota**: Las siguientes secciones describen casos de uso ideales. Nuestra implementacion POC solo soporta Ed25519 para crear DIDs. Firmar, verificar y cifrar/descifrar real no estan implementados en el KMS remoto.
+> **Nota**: Las siguientes secciones describen los distintos tipos de claves y sus usos. Nuestra implementación soporta Ed25519 (firma/verificación) y X25519 (key agreement para cifrado DIDComm).
 
 ### 1. Claves del DID (Ed25519)
 
@@ -129,11 +129,11 @@ Las claves permiten que el sistema sea **confidencial** (solo el destinatario le
 |--------------------|-------------|------|
 | **Crear DID** (createKey) | Si | CustomDidRegistrar llama kms.createKey() -> Ed25519 |
 | **Obtener clave publica** (getPublicKey) | Si | Para DidRecord, resolver, etc. |
-| **Firmar** | No | sign() lanza "not implemented"; Credo usa crypto interno |
-| **Verificar** | No | verify() lanza "not implemented" |
-| **Cifrar/descifrar** DIDComm | Stub | encrypt/decrypt son pass-through; Credo puede usar su stack |
+| **Firmar** | Si | sign() delega a kms-service vía POST /sign (Ed25519) |
+| **Verificar** | Si | verify() usa publicJwk local o delega a kms-service vía POST /verify |
+| **Cifrar/descifrar** DIDComm | Si | ChaCha20-Poly1305 + X25519 key agreement (anoncrypt/authcrypt) |
 
-El agente usa `RemoteKeyManagementService`, que traduce llamadas de Credo a HTTP hacia kms-service. Para crear DIDs (flujo OOB actual) el KMS basta: createKey + getPublicKey.
+El agente usa `RemoteKeyManagementService`, que traduce llamadas de Credo a HTTP hacia kms-service. Soporta todas las operaciones necesarias para el flujo completo: createKey, getPublicKey, sign, verify, encrypt y decrypt. La verificación con `publicJwk` (sin keyId) se hace localmente con `crypto.verify` de Node.js. `randomBytes` también se ejecuta localmente.
 
 ---
 
@@ -149,8 +149,8 @@ El agente usa `RemoteKeyManagementService`, que traduce llamadas de Credo a HTTP
 | POST | `/random` | Bytes aleatorios. Body: `{ length?: number }`. Retorna `{ random: "base64..." }` |
 | POST | `/sign` | Firmar con Ed25519. Body: `{ keyId, data (base64) }`. Retorna `{ signature (base64) }` |
 | POST | `/verify` | Verificar firma Ed25519. Body: `{ keyId, data, signature }`. Retorna `{ valid }` |
-| POST | `/encrypt` | Stub: retorna datos sin cifrar |
-| POST | `/decrypt` | Stub: retorna `{ data: body.encrypted }` sin descifrar |
+| POST | `/encrypt` | Cifrar. Body: `{ key, encryption?, data (base64) }`. Soporta ChaCha20-Poly1305 y X25519 key agreement. |
+| POST | `/decrypt` | Descifrar. Body: `{ key, encryption?, encrypted (base64), iv?, tag? }`. |
 
 ---
 
@@ -220,7 +220,7 @@ Si se quisiera separacion explícita (por wallet/agente), habria que añadir col
 | Random bytes (POST /random) | OK - KMS; Credo usa crypto local |
 | Firmar | OK - Ed25519 |
 | Verificar | OK - Ed25519 |
-| Cifrar/descifrar real | No - pass-through |
+| Cifrar/descifrar DIDComm | OK - ChaCha20-Poly1305 + X25519 |
 
 ---
 
@@ -228,37 +228,7 @@ Si se quisiera separacion explícita (por wallet/agente), habria que añadir col
 
 | Variable | Valor | Efecto |
 |----------|-------|--------|
-| `USE_REMOTE_KMS: "false"` | **Actual** | Issuer, holder y verifier usan el **KMS interno** (MockKMS / in-memory de Credo). No dependen de kms-service. |
-| `USE_REMOTE_KMS: "true"` | RemoteKMS | Usan kms-service vía HTTP. Requiere que kms-service esté levantado. |
+| `USE_REMOTE_KMS: "false"` | KMS interno | Issuer, holder y verifier usan el **KMS interno** (MockKMS / in-memory de Credo). No dependen de kms-service. Claves se pierden al reiniciar. |
+| `USE_REMOTE_KMS: "true"` | **Actual** | Usan kms-service vía HTTP. Requiere que kms-service esté levantado. Claves persisten en SQLite. |
 
-**Cambio aplicado (feb 2026)** para priorizar que funcione el flujo: `USE_REMOTE_KMS: "false"` en docker-compose para issuer, holder y verifier. Así se valida el flujo completo (OOB, DIDComm, credenciales) con el KMS interno antes de reintentar RemoteKMS.
-
----
-
-## Error con RemoteKMS: "Invalid options provided to encrypt method"
-
-Cuando `USE_REMOTE_KMS: "true"`, al hacer `POST /receive-invitation` (y flujos DIDComm que cifran), puede aparecer:
-
-```
-Invalid options provided to encrypt method
-Invalid input → at data
-```
-
-### Causa
-
-Credo valida las opciones de `kms.encrypt()` con un esquema Zod (`zKmsEncryptOptions`). El campo `data` usa `zAnyUint8Array`, definido en `@credo-ts/core` como:
-
-```js
-const zAnyUint8Array = z.instanceof(Uint8Array);
-```
-
-`JsonEncoder.toBuffer()` (usado en DidCommEnvelopeService para serializar el mensaje) devuelve un **Buffer** de Node. En teoría, `Buffer` extiende `Uint8Array`, pero en algunos contextos `instanceof` falla y la validación rechaza el valor antes de llamar a nuestro RemoteKMS.
-
-### ¿Se puede parchear en nuestro código?
-
-**No.** La validación ocurre **dentro de Credo** (`KeyManagementApi.encrypt()`) **antes** de delegar al backend. Nuestro `RemoteKeyManagementService.encrypt()` solo se ejecuta si la validación pasa; si falla, nunca llega a nuestro código. No hay hook ni wrapper en nuestra app que permita corregir `data` antes de esa validación.
-
-### Opciones para habilitar RemoteKMS
-
-1. **patch-package** sobre `@credo-ts/core`: modificar `build/utils/zod.mjs` para que `zAnyUint8Array` acepte también `Buffer` y `ArrayBuffer`, convirtiéndolos a `Uint8Array`. El parche se reaplica con `postinstall`.
-2. **Reportar el bug** a [credo-ts/issues](https://github.com/openwallet-foundation/credo-ts/issues) y usar KMS interno hasta que lo corrijan.
+El flujo completo (OOB, DIDComm, conexiones, emisión de credenciales, presentación de proofs) funciona con ambos modos.
