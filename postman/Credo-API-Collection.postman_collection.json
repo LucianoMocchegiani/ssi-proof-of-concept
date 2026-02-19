@@ -169,7 +169,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"connectionId\": \"{{connectionId}}\",\n  \"credentialSubject\": {\n    \"name\": \"María García\",\n    \"email\": \"maria@ejemplo.com\"\n  },\n  \"type\": [\"GenericCredential\"]\n}"
+              "raw": "{\n  \"connectionId\": \"{{connectionId}}\",\n  \"credential\": {\n    \"credentialSubject\": {\n      \"name\": \"María García\",\n      \"email\": \"maria@ejemplo.com\"\n    },\n    \"type\": [\"GenericCredential\"]\n  },\n  \"proofType\": \"Ed25519Signature2018\"\n}"
             },
             "url": "{{holder_base}}/propose-credential",
             "description": "Holder inicia el flujo proponiendo. Issuer acepta y envía Offer automáticamente."
@@ -343,7 +343,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"connectionId\": \"{{connectionId}}\",\n  \"credentialSubject\": { \"name\": \"Test\" },\n  \"type\": [\"GenericCredential\"]\n}"
+              "raw": "{\n  \"connectionId\": \"{{connectionId}}\",\n  \"credential\": {\n    \"credentialSubject\": { \"name\": \"Test\" },\n    \"type\": [\"GenericCredential\"]\n  },\n  \"proofType\": \"Ed25519Signature2018\"\n}"
             },
             "url": "{{holder_base}}/propose-credential"
           }

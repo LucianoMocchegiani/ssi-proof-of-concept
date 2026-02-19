@@ -18,6 +18,7 @@ import { registerStorageAdapter } from './agent-issuer-storage'
 import { buildKeyManagementModule, registerKmsConfig } from './agent-issuer-kms'
 import { buildDidsModule } from './agent-issuer-dids'
 import { DidCommWsOutboundTransportDelayedClose } from '../transport/ws-outbound-delayed-close.transport'
+import { getIssuerDid } from './issuer-did-store'
 
 /**
  * Inicializa el agente Credo del issuer.
@@ -98,14 +99,45 @@ function setupCredentialListeners(agent: Agent) {
     const record = payload.credentialExchangeRecord as DidCommCredentialExchangeRecord
     try {
       switch (record.state) {
-        case DidCommCredentialState.ProposalReceived:
+        case DidCommCredentialState.ProposalReceived: {
           // eslint-disable-next-line no-console
           console.log('Issuer: Proposal received, sending offer...')
-          await agent.didcomm.credentials.acceptProposal({
-            credentialExchangeRecordId: record.id,
-            comment: 'JSON-LD Credential Offer',
-          })
+          const issuerDid = getIssuerDid()
+          const formatData = await agent.didcomm.credentials.getFormatData(record.id)
+          const proposalJsonLd = (formatData as any).proposal?.jsonld
+
+          if (proposalJsonLd?.credential) {
+            const proposed = proposalJsonLd.credential
+            const customTypes = (proposed.type ?? []).filter((t: string) => t !== 'VerifiableCredential')
+            const credential = {
+              ...proposed,
+              '@context': proposed['@context']?.length > 1
+                ? proposed['@context']
+                : [
+                    'https://www.w3.org/2018/credentials/v1',
+                    'http://schema.org/',
+                    Object.fromEntries(customTypes.map((t: string) => [t, `https://www.w3.org/2018/credentials#${t}`])),
+                  ],
+              issuer: proposed.issuer || issuerDid,
+            }
+            await agent.didcomm.credentials.negotiateProposal({
+              credentialExchangeRecordId: record.id,
+              credentialFormats: {
+                jsonld: {
+                  credential,
+                  options: proposalJsonLd.options,
+                },
+              },
+              comment: 'JSON-LD Credential Offer',
+            })
+          } else {
+            await agent.didcomm.credentials.acceptProposal({
+              credentialExchangeRecordId: record.id,
+              comment: 'JSON-LD Credential Offer',
+            })
+          }
           break
+        }
         case DidCommCredentialState.RequestReceived:
           // eslint-disable-next-line no-console
           console.log('Issuer: Request received, issuing credential...')

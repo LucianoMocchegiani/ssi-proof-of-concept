@@ -2,19 +2,13 @@ import { Injectable } from '@nestjs/common'
 import { randomUUID } from 'crypto'
 import { issuerAgent } from '../agent/agent-store'
 import { getIssuerDid } from '../agent/issuer-did-store'
+import type { CredentialExchangeDto } from './credential-exchange.dto'
 
 @Injectable()
 export class CredentialsService {
-  /** Issuer: envía Offer Credential al holder. */
-  async offerCredential(params: {
-    connectionId: string
-    credential: {
-      '@context'?: string[]
-      credentialSubject: Record<string, unknown>
-      type?: string[]
-    }
-    proofType?: string
-  }): Promise<{ credentialExchangeId: string; state: string } | { error: string }> {
+  async offerCredential(
+    params: CredentialExchangeDto,
+  ): Promise<{ credentialExchangeId: string; state: string } | { error: string }> {
     const agent = issuerAgent as any
     if (!agent) return { error: 'Agent not ready' }
 

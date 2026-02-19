@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { JsonTransformer } from '@credo-ts/core'
 import { holderAgent } from '../agent/agent-store'
 import { getHolderDid } from '../agent/holder-did-store'
+import type { CredentialExchangeDto } from './credential-exchange.dto'
 
 function toCredentialPayload(enc: unknown, json: unknown): unknown {
   if (typeof enc === 'string') return enc
@@ -13,12 +14,9 @@ function toCredentialPayload(enc: unknown, json: unknown): unknown {
 export class CredentialsService {
   private readonly logger = new Logger(CredentialsService.name)
 
-  /** Holder: inicia el flujo proponiendo una credencial al issuer. */
-  async proposeCredential(params: {
-    connectionId: string
-    credentialSubject: Record<string, unknown>
-    type?: string[]
-  }): Promise<{ credentialExchangeId: string; state: string } | { error: string }> {
+  async proposeCredential(
+    params: CredentialExchangeDto,
+  ): Promise<{ credentialExchangeId: string; state: string } | { error: string }> {
     const agent = holderAgent as any
     if (!agent) return { error: 'Agent not ready' }
 
@@ -26,12 +24,19 @@ export class CredentialsService {
     if (!conn) return { error: `Connection ${params.connectionId} not found` }
 
     const holderDid = getHolderDid()
+    const customTypes = params.credential.type ?? ['GenericCredential']
     const credential = {
-      '@context': ['https://www.w3.org/2018/credentials/v1'],
-      type: ['VerifiableCredential', ...(params.type ?? ['GenericCredential'])],
-      issuer: '',
+      '@context': params.credential['@context'] ?? [
+        'https://www.w3.org/2018/credentials/v1',
+        'http://schema.org/',
+        Object.fromEntries(customTypes.map((t) => [t, `https://www.w3.org/2018/credentials#${t}`])),
+      ],
+      type: ['VerifiableCredential', ...customTypes],
       issuanceDate: new Date().toISOString(),
-      credentialSubject: { id: holderDid, ...params.credentialSubject },
+      credentialSubject: {
+        id: params.credential.credentialSubject?.id ?? holderDid,
+        ...params.credential.credentialSubject,
+      },
     }
 
     try {
@@ -42,7 +47,7 @@ export class CredentialsService {
           jsonld: {
             credential,
             options: {
-              proofType: 'Ed25519Signature2018',
+              proofType: params.proofType ?? 'Ed25519Signature2018',
               proofPurpose: 'assertionMethod',
             },
           },
@@ -56,7 +61,6 @@ export class CredentialsService {
     }
   }
 
-  /** Lista credenciales verificables (objeto VC por credencial). */
   async listCredentials(): Promise<{ credentials: unknown[] } | { error: string }> {
     const agent = holderAgent as any
     if (!agent) return { error: 'Agent not ready' }

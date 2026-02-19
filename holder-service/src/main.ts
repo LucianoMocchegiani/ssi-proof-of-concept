@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { Logger } from '@nestjs/common'
+import { Logger, ValidationPipe } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from './app.module'
 import { envConfig } from './config'
@@ -20,6 +20,7 @@ process.on('uncaughtException', (err) => {
 /** Bootstrap: Nest maneja HTTP (rutas), luego adjuntamos WebSocket DIDComm al mismo servidor. */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }))
   const port = envConfig.port
 
   await app.listen(port)
