@@ -60,7 +60,7 @@ services:
       SERVICE_HOST: issuer-service
       DIDCOMM_ENDPOINT: ws://issuer-service:3000
       DIDCOMM_PORT: 3000
-      USE_REMOTE_KMS: "false"
+      USE_REMOTE_KMS: "true"
       REMOTE_KMS_URL: http://kms-service:4001
       USE_REMOTE_STORAGE: "true"
       REMOTE_STORAGE_URL: http://storage-service:4002
@@ -80,7 +80,7 @@ services:
       PORT: 9005
       SERVICE_HOST: holder-service
       DIDCOMM_ENDPOINT: ws://holder-service:9005
-      USE_REMOTE_KMS: "false"
+      USE_REMOTE_KMS: "true"
       REMOTE_KMS_URL: http://kms-service:4001
       USE_REMOTE_STORAGE: "true"
       REMOTE_STORAGE_URL: http://storage-service:4002
@@ -101,7 +101,7 @@ services:
       DIDCOMM_PORT: 9004
       SERVICE_HOST: verifier-service
       DIDCOMM_ENDPOINT: ws://verifier-service:9004
-      USE_REMOTE_KMS: "false"
+      USE_REMOTE_KMS: "true"
       REMOTE_KMS_URL: http://kms-service:4001
       USE_REMOTE_STORAGE: "true"
       REMOTE_STORAGE_URL: http://storage-service:4002

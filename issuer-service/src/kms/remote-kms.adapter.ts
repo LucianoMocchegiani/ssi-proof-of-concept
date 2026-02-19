@@ -98,7 +98,18 @@ export class RemoteKeyManagementService implements Kms.KeyManagementService {
 
   public async verify(_agentContext: AgentContext, options: Kms.KmsVerifyOptions): Promise<Kms.KmsVerifyReturn> {
     const opts = options as any
-    const keyId = opts.keyId ?? opts.key?.keyId
+    const publicJwk = opts.key?.publicJwk
+
+    if (publicJwk) {
+      const { createPublicKey, verify } = await import('crypto')
+      const pubKey = createPublicKey({ key: publicJwk, format: 'jwk' })
+      const dataBuf = options.data instanceof Uint8Array ? options.data : Buffer.from(options.data as any)
+      const sigBuf = options.signature instanceof Uint8Array ? options.signature : Buffer.from(options.signature as any)
+      const valid = verify(null, dataBuf, pubKey, sigBuf)
+      return valid ? { verified: true, publicJwk } : { verified: false } as any
+    }
+
+    const keyId = opts.key?.keyId
     const data =
       options.data instanceof Uint8Array
         ? Buffer.from(options.data).toString('base64')
