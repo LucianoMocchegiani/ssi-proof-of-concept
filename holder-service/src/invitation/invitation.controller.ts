@@ -1,19 +1,13 @@
 import { Controller, Post, Body } from '@nestjs/common'
 import { InvitationService } from './invitation.service'
+import { ReceiveInvitationDto } from './receive-invitation.dto'
 
-/**
- * Controller para recibir invitaciones OOB del issuer.
- *
- * Body: { invitationUrl }. Establece conexión DIDComm con el issuer.
- */
 @Controller()
 export class InvitationController {
   constructor(private readonly invitationService: InvitationService) {}
 
-  /** Recibe URL OOB, ejecuta protocolo de conexión. Retorna outOfBandRecordId. */
   @Post('receive-invitation')
-  async receive(@Body() body: { invitationUrl?: string }) {
-    if (!body?.invitationUrl) return { error: 'invitationUrl required' }
+  async receive(@Body() body: ReceiveInvitationDto) {
     try {
       const outOfBandRecord = await this.invitationService.receiveInvitation(body.invitationUrl)
       return { ok: true, outOfBandRecordId: outOfBandRecord?.id ?? null }
@@ -22,4 +16,3 @@ export class InvitationController {
     }
   }
 }
-

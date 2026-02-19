@@ -23,16 +23,14 @@ const DEFAULT_PRESENTATION_DEFINITION = {
   ],
 }
 
-export interface RequestProofParams {
-  connectionId: string
-  presentationDefinition?: typeof DEFAULT_PRESENTATION_DEFINITION
-  challenge?: string
-  domain?: string
-}
-
 @Injectable()
 export class CredentialsService {
-  async requestProof(params: RequestProofParams): Promise<{
+  async requestProof(params: {
+    connectionId: string
+    presentationDefinition?: Record<string, unknown>
+    challenge?: string
+    domain?: string
+  }): Promise<{
     proofExchangeRecordId: string
     state: string
     error?: string
