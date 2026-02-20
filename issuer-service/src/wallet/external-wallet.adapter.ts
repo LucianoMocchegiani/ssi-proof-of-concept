@@ -1,84 +1,247 @@
-import { AgentContext, BaseRecordConstructor, JsonTransformer } from '@credo-ts/core'
+import type { AgentContext, BaseRecordConstructor } from '@credo-ts/core'
+import { JsonTransformer } from '@credo-ts/core'
+
+/**
+ * Datos JSON de un record Credo serializado (BaseRecord.toJSON()).
+ * Cada record en la DB tiene (type, id, data) donde data es este objeto.
+ */
+interface RecordData {
+  /** UUID único del record, generado por Credo al crear el registro */
+  id: string
+  /** Tipo del record (ej: 'ConnectionRecord', 'DidRecord', 'OutOfBandRecord') */
+  type?: string
+  /** Fecha de creación ISO 8601 (ej: '2026-02-20T10:30:00.000Z') */
+  createdAt?: string
+  /** Fecha de última actualización ISO 8601 */
+  updatedAt?: string
+  /** Tags indexados del record, usados por Credo para queries rápidas */
+  tags?: RecordTags
+  /** Tags legacy (formato anterior de Credo, misma estructura que tags) */
+  _tags?: RecordTags
+  /** Rol del agente en el protocolo (ej: 'sender', 'receiver', 'issuer', 'holder') */
+  role?: string
+  /** Estado actual en la máquina de estados del protocolo (ej: 'completed', 'request-sent', 'offer-received') */
+  state?: string
+  /** DID propio del agente en esta relación/conexión */
+  did?: string
+  /** DID de la contraparte en esta relación/conexión */
+  theirDid?: string
+  /** DIDs propios anteriores (rotación de DID en conexiones) */
+  previousDids?: string[]
+  /** DIDs de la contraparte anteriores (rotación de DID) */
+  previousTheirDids?: string[]
+  /** ID del hilo DIDComm que agrupa mensajes de un mismo flujo */
+  threadId?: string
+  /** ID de otro record relacionado (ej: DidCommMessageRecord → ConnectionRecord) */
+  associatedRecordId?: string
+  /** Invitación OOB embebida (solo OutOfBandRecord) */
+  outOfBandInvitation?: {
+    /** ID de la invitación (formato JSON-LD) */
+    '@id'?: string
+    /** ID de la invitación (formato alternativo) */
+    id?: string
+    /** Thread ID de la invitación */
+    threadId?: string
+    [key: string]: unknown
+  }
+  /** ID de la invitación OOB asociada */
+  invitationId?: string
+  /** Mensaje DIDComm almacenado (solo DidCommMessageRecord) */
+  message?: {
+    /** Tipo del mensaje DIDComm (ej: 'https://didcomm.org/connections/1.0/request') */
+    '@type'?: string
+    [key: string]: unknown
+  }
+  [key: string]: unknown
+}
+
+/**
+ * Tags de un record Credo. Credo los usa como índices para buscar records rápidamente.
+ * En nuestra implementación se filtran en memoria (filterByQuery).
+ */
+interface RecordTags {
+  /** ID de la invitación OOB asociada al record */
+  invitationId?: string
+  /** Thread ID del protocolo DIDComm */
+  threadId?: string
+  /** Rol del agente (duplica record.role para indexación) */
+  role?: string
+  /** Estado del protocolo (duplica record.state para indexación) */
+  state?: string
+  /** Fingerprints de las claves receptoras (multibase z6L...), usados para encontrar el OOB record correspondiente a un mensaje entrante */
+  recipientKeyFingerprints?: string[]
+  /** Fingerprint de la clave de routing del mediador */
+  recipientRoutingKeyFingerprint?: string
+  /** DIDs alternativos del agente (ej: did:peer:4 tiene variantes) */
+  alternativeDids?: string[]
+  /** Nombre del mensaje DIDComm (ej: 'request', 'response') - extraído de @type */
+  messageName?: string
+  /** Nombre del protocolo DIDComm (ej: 'connections', 'issue-credential') - extraído de @type */
+  protocolName?: string
+  /** Versión mayor del protocolo (ej: '1' de '1.0') - extraída de @type */
+  protocolMajorVersion?: string
+  [key: string]: unknown
+}
+
+/**
+ * Query usada en findByQuery/filterByQuery.
+ * Mapea los filtros que Credo puede enviar al buscar records.
+ */
+interface RecordQuery {
+  /** Filtrar por ID exacto del record */
+  id?: string
+  /** Filtrar por ID del record asociado (ej: buscar mensajes de una conexión) */
+  associatedRecordId?: string
+  /** Filtrar por ID de invitación OOB */
+  invitationId?: string
+  /** Filtrar por rol del agente en el protocolo */
+  role?: string
+  /** Filtrar por estado del protocolo (ej: 'completed', 'request-sent') */
+  state?: string
+  /** Filtrar por nombre del mensaje DIDComm */
+  messageName?: string
+  /** Filtrar por nombre del protocolo DIDComm */
+  protocolName?: string
+  /** Filtrar por versión mayor del protocolo */
+  protocolMajorVersion?: string
+  /** Filtrar por thread ID del hilo DIDComm */
+  threadId?: string
+  /** Filtrar por fingerprints de claves receptoras */
+  recipientKeyFingerprints?: string | string[]
+  /** Cláusulas OR: al menos una debe matchear. Credo las usa para buscar conexiones por DID o fingerprint */
+  $or?: QueryOrClause[]
+}
+
+/**
+ * Cláusula individual dentro de $or.
+ * Credo combina múltiples criterios con OR para buscar conexiones/OOBs.
+ */
+interface QueryOrClause {
+  /** Filtrar por rol del agente */
+  role?: string
+  /** Filtrar por DID propio */
+  did?: string
+  /** Filtrar por DID de la contraparte */
+  theirDid?: string
+  /** Filtrar por DIDs propios anteriores (rotación) */
+  previousDids?: string[]
+  /** Filtrar por DIDs de contraparte anteriores (rotación) */
+  previousTheirDids?: string[]
+  /** Filtrar por DIDs alternativos */
+  alternativeDids?: string[]
+  /** Filtrar por fingerprints de claves receptoras */
+  recipientKeyFingerprints?: string | string[]
+  /** Filtrar por fingerprint de clave de routing del mediador */
+  recipientRoutingKeyFingerprint?: string
+}
+
+/** Info extraída del @type de un mensaje DIDComm (ej: 'https://didcomm.org/connections/1.0/request'). */
+interface ParsedMessageType {
+  /** Nombre del mensaje (ej: 'request', 'response', 'offer') */
+  messageName: string
+  /** Nombre del protocolo (ej: 'connections', 'issue-credential') */
+  protocolName: string
+  /** Versión mayor del protocolo (ej: '1') */
+  protocolMajorVersion: string
+}
+
+/** Item retornado por el wallet-service en getAll/query: id + data JSON. */
+interface RecordItem {
+  /** UUID del record */
+  id: string
+  /** Datos JSON del record serializado */
+  data: RecordData
+}
 
 /**
  * Wallet externo via HTTP: delega al wallet-service centralizado.
- * Scope por walletId para que cada agente (issuer, holder, verifier) tenga sus propios registros.
+ * Scope por walletId para que cada agente tenga sus propios registros.
  */
 export class ExternalWalletStorageService {
   constructor(
     private baseUrl: string,
-    private walletId: string
+    private walletId: string,
   ) {}
 
   private scopeType(type: string): string {
     return `${this.walletId}::${type}`
   }
 
-  private parseMessageTypeFromRecord(d: any): { messageName?: string; protocolName?: string; protocolMajorVersion?: string } | null {
-    const msgType = d?.message?.['@type']
-    if (typeof msgType !== 'string') return null
-    const match = /^(.+)\/([^/\\]+)\/(\d+)\.(\d+)\/([^/\\]+)$/.exec(msgType)
-    if (!match) return null
-    const [, , protocolName, major] = match
-    return { protocolName, protocolMajorVersion: major, messageName: match[5] }
-  }
-
-  private async call(path: string, init?: RequestInit) {
+  private async call<T = unknown>(path: string, init?: RequestInit): Promise<T> {
     const url = `${this.baseUrl}${path}`
     const res = await fetch(url, init)
     if (!res.ok) throw new Error(`ExternalWallet error ${res.status}`)
-    return res.json()
+    return res.json() as Promise<T>
   }
 
-  async save(_ctx: AgentContext, record: any) {
-    const rawType = record.constructor.type || (record.type ?? 'record')
-    const type = this.scopeType(rawType)
-    const data = typeof record.toJSON === 'function' ? record.toJSON() : record
-    const body = { type, id: record.id, data }
-    return await this.call('/records', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } })
-  }
-
-  private idInUrl(id: string) {
+  private idInUrl(id: string): boolean {
     return id.length <= 512
   }
 
-  async update(_ctx: AgentContext, record: any) {
+  private ensureRecordInstance<T>(instance: T | null, recordClass: BaseRecordConstructor<T>): T | null {
+    if (!instance) return null
+    if (typeof (instance as Record<string, unknown>).clone === 'function') return instance
+    return JsonTransformer.fromJSON(JsonTransformer.toJSON(instance), recordClass, { validate: false }) as T
+  }
+
+  async save(_ctx: AgentContext, record: { id: string; constructor: { type?: string }; type?: string; toJSON?: () => RecordData }): Promise<void> {
+    const rawType = record.constructor.type || (record.type ?? 'record')
+    const type = this.scopeType(rawType)
+    const data = typeof record.toJSON === 'function' ? record.toJSON() : record
+    await this.call('/records', {
+      method: 'POST',
+      body: JSON.stringify({ type, id: record.id, data }),
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  async update(_ctx: AgentContext, record: { id: string; constructor: { type?: string }; type?: string; toJSON?: () => RecordData }): Promise<void> {
     const rawType = record.constructor.type || (record.type ?? 'record')
     const type = this.scopeType(rawType)
     const data = typeof record.toJSON === 'function' ? record.toJSON() : record
     if (this.idInUrl(record.id)) {
-      await this.call(`/records/${encodeURIComponent(type)}/${encodeURIComponent(record.id)}`, { method: 'PUT', body: JSON.stringify({ data }), headers: { 'content-type': 'application/json' } })
+      await this.call(`/records/${encodeURIComponent(type)}/${encodeURIComponent(record.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ data }),
+        headers: { 'content-type': 'application/json' },
+      })
     } else {
-      await this.call('/records/update', { method: 'POST', body: JSON.stringify({ type, id: record.id, data }), headers: { 'content-type': 'application/json' } })
+      await this.call('/records/update', {
+        method: 'POST',
+        body: JSON.stringify({ type, id: record.id, data }),
+        headers: { 'content-type': 'application/json' },
+      })
     }
   }
 
-  async delete(_ctx: AgentContext, record: any) {
+  async delete(_ctx: AgentContext, record: { id: string; constructor: { type?: string }; type?: string }): Promise<void> {
     const rawType = record.constructor.type || (record.type ?? 'record')
     const type = this.scopeType(rawType)
     if (this.idInUrl(record.id)) {
       await this.call(`/records/${encodeURIComponent(type)}/${encodeURIComponent(record.id)}`, { method: 'DELETE' })
     } else {
-      await this.call('/records/delete', { method: 'POST', body: JSON.stringify({ type, id: record.id }), headers: { 'content-type': 'application/json' } })
+      await this.call('/records/delete', {
+        method: 'POST',
+        body: JSON.stringify({ type, id: record.id }),
+        headers: { 'content-type': 'application/json' },
+      })
     }
   }
 
-  async deleteById(_ctx: AgentContext, recordClass: BaseRecordConstructor<any>, id: string) {
+  async deleteById<T>(_ctx: AgentContext, recordClass: BaseRecordConstructor<T>, id: string): Promise<void> {
     const type = this.scopeType(recordClass.type)
     if (this.idInUrl(id)) {
       await this.call(`/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, { method: 'DELETE' })
     } else {
-      await this.call('/records/delete', { method: 'POST', body: JSON.stringify({ type, id }), headers: { 'content-type': 'application/json' } })
+      await this.call('/records/delete', {
+        method: 'POST',
+        body: JSON.stringify({ type, id }),
+        headers: { 'content-type': 'application/json' },
+      })
     }
   }
 
-  private ensureRecordInstance<T>(instance: T | null, recordClass: BaseRecordConstructor<any>): T | null {
-    if (!instance) return null
-    if (typeof (instance as any).clone === 'function') return instance
-    return JsonTransformer.fromJSON(JsonTransformer.toJSON(instance), recordClass, { validate: false }) as T
-  }
-
-  async getById(_ctx: AgentContext, recordClass: BaseRecordConstructor<any>, id: string) {
+  async getById<T>(_ctx: AgentContext, recordClass: BaseRecordConstructor<T>, id: string): Promise<T | null> {
     const type = this.scopeType(recordClass.type)
     const res = await fetch(`${this.baseUrl}/records/get`, {
       method: 'POST',
@@ -87,101 +250,134 @@ export class ExternalWalletStorageService {
     })
     if (res.status === 404) return null
     if (!res.ok) throw new Error(`ExternalWallet error ${res.status}`)
-    const data = await res.json()
+    const data = await res.json() as RecordData
     return this.ensureRecordInstance(JsonTransformer.fromJSON(data, recordClass), recordClass)
   }
 
-  async getAll(_ctx: AgentContext, recordClass: BaseRecordConstructor<any>) {
+  async getAll<T>(_ctx: AgentContext, recordClass: BaseRecordConstructor<T>): Promise<T[]> {
     const type = this.scopeType(recordClass.type)
-    const items = await this.call(`/records/${encodeURIComponent(type)}`)
-    return (Array.isArray(items) ? items : []).map((item: { id: string; data: any }) =>
-      this.ensureRecordInstance(JsonTransformer.fromJSON(item.data, recordClass), recordClass)
-    )
+    const items = await this.call<RecordItem[]>(`/records/${encodeURIComponent(type)}`)
+    return (Array.isArray(items) ? items : [])
+      .map((item) => this.ensureRecordInstance(JsonTransformer.fromJSON(item.data, recordClass), recordClass))
+      .filter((r): r is T => r !== null)
   }
 
-  private filterByQuery(items: { id: string; data: any }[], query: any): { id: string; data: any }[] {
+  private parseMessageType(d: RecordData): ParsedMessageType | null {
+    const msgType = d?.message?.['@type']
+    if (typeof msgType !== 'string') return null
+    const match = /^(.+)\/([^/\\]+)\/(\d+)\.(\d+)\/([^/\\]+)$/.exec(msgType)
+    if (!match) return null
+    return { protocolName: match[2], protocolMajorVersion: match[3], messageName: match[5] }
+  }
+
+  private filterByQuery(items: RecordItem[], query: RecordQuery): RecordItem[] {
     if (!query || typeof query !== 'object') return items
+
     return items.filter((item) => {
       const d = item.data
-      const tags = d?.tags ?? d?._tags ?? {}
+      const tags: RecordTags = (d?.tags ?? d?._tags ?? {}) as RecordTags
+
       if (query.id != null && item.id !== query.id) return false
       if (query.associatedRecordId != null && d?.associatedRecordId !== query.associatedRecordId) return false
+      if (query.state != null && d?.state !== query.state && tags?.state !== query.state) return false
+
       if (query.invitationId != null) {
         const inv = d?.outOfBandInvitation
         const invId = inv?.['@id'] ?? inv?.id ?? tags?.invitationId
         if (invId !== query.invitationId) return false
       }
+
       if (query.role !== undefined && d?.role !== query.role) return false
+
       if (query.messageName != null || query.protocolName != null || query.protocolMajorVersion != null) {
-        const msgType = (tags?.messageName != null ? tags : null) ?? this.parseMessageTypeFromRecord(d)
-        if (query.messageName != null && msgType?.messageName !== query.messageName) return false
-        if (query.protocolName != null && msgType?.protocolName !== query.protocolName) return false
-        if (query.protocolMajorVersion != null && String(msgType?.protocolMajorVersion) !== String(query.protocolMajorVersion)) return false
+        const msgInfo = (tags?.messageName != null ? tags as ParsedMessageType : null) ?? this.parseMessageType(d)
+        if (query.messageName != null && msgInfo?.messageName !== query.messageName) return false
+        if (query.protocolName != null && msgInfo?.protocolName !== query.protocolName) return false
+        if (query.protocolMajorVersion != null && String(msgInfo?.protocolMajorVersion) !== String(query.protocolMajorVersion)) return false
       }
+
       if (query.threadId != null) {
         const tid = d?.threadId ?? d?.outOfBandInvitation?.threadId ?? tags?.threadId
         if (tid !== query.threadId) return false
       }
+
       if (query.recipientKeyFingerprints != null && !Array.isArray(query.$or)) {
-        const fps = tags.recipientKeyFingerprints ?? []
+        const fps: string[] = (tags.recipientKeyFingerprints ?? [])
         const q = Array.isArray(query.recipientKeyFingerprints) ? query.recipientKeyFingerprints : [query.recipientKeyFingerprints]
-        if (!q.every((f: string) => fps.includes(f))) return false
+        if (!q.every((f) => fps.includes(f))) return false
       }
+
       if (Array.isArray(query.$or)) {
-        const fps = tags.recipientKeyFingerprints ?? []
+        const fps: string[] = (tags.recipientKeyFingerprints ?? [])
         const routingFp = tags.recipientRoutingKeyFingerprint
-        const orMatch = query.$or.some((sub: any) => {
+
+        const orMatch = query.$or.some((sub) => {
           if (sub?.role !== undefined && d?.role !== sub.role) return false
+
           const isConnectionDidQuery =
             (sub?.did != null || Array.isArray(sub?.previousDids)) &&
             (sub?.theirDid != null || Array.isArray(sub?.previousTheirDids))
           if (isConnectionDidQuery) {
-            const didMatch = sub?.did != null ? d?.did === sub.did : Array.isArray(sub?.previousDids) && (d?.previousDids ?? []).includes(sub.previousDids[0])
-            const theirDidMatch =
-              sub?.theirDid != null
-                ? d?.theirDid === sub.theirDid
-                : Array.isArray(sub?.previousTheirDids) && (d?.previousTheirDids ?? []).includes(sub.previousTheirDids[0])
-            if (didMatch && theirDidMatch) return true
-            return false
+            const didMatch = sub?.did != null
+              ? d?.did === sub.did
+              : Array.isArray(sub?.previousDids) && (d?.previousDids ?? []).includes(sub.previousDids![0])
+            const theirDidMatch = sub?.theirDid != null
+              ? d?.theirDid === sub.theirDid
+              : Array.isArray(sub?.previousTheirDids) && (d?.previousTheirDids ?? []).includes(sub.previousTheirDids![0])
+            return didMatch && theirDidMatch
           }
+
           if (sub?.did != null && d?.did === sub.did) return true
+
           if (Array.isArray(sub?.alternativeDids)) {
-            const alts = tags.alternativeDids ?? []
-            if (sub.alternativeDids.some((ad: string) => alts.includes(ad))) return true
+            const alts: string[] = (tags.alternativeDids ?? [])
+            if (sub.alternativeDids.some((ad) => alts.includes(ad))) return true
           }
-          const subFps = sub?.recipientKeyFingerprints
-          if (subFps) {
-            const arr = Array.isArray(subFps) ? subFps : [subFps]
-            if (arr.some((f: string) => fps.includes(f))) return true
+
+          if (sub?.recipientKeyFingerprints) {
+            const arr = Array.isArray(sub.recipientKeyFingerprints) ? sub.recipientKeyFingerprints : [sub.recipientKeyFingerprints]
+            if (arr.some((f) => fps.includes(f))) return true
           }
-          const subRouting = sub?.recipientRoutingKeyFingerprint
-          if (subRouting && routingFp === subRouting) return true
+
+          if (sub?.recipientRoutingKeyFingerprint && routingFp === sub.recipientRoutingKeyFingerprint) return true
+
           return false
         })
         if (!orMatch) return false
       }
+
       return true
     })
   }
 
-  async findByQuery(_ctx: AgentContext, recordClass: BaseRecordConstructor<any>, query: any) {
+  private parseDate(v: string | undefined): number {
+    if (!v) return 0
+    const ms = Date.parse(v)
+    return isNaN(ms) ? 0 : ms
+  }
+
+  async findByQuery<T>(_ctx: AgentContext, recordClass: BaseRecordConstructor<T>, query: RecordQuery): Promise<T[]> {
     const type = this.scopeType(recordClass.type)
-    const body = { type, query }
-    const items = await this.call('/records/query', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } })
+    const items = await this.call<RecordItem[]>('/records/query', {
+      method: 'POST',
+      body: JSON.stringify({ type, query }),
+      headers: { 'content-type': 'application/json' },
+    })
     let filtered = this.filterByQuery(Array.isArray(items) ? items : [], query)
+
     const isOobRecipientQuery =
       recordClass.type === 'OutOfBandRecord' &&
       Array.isArray(query?.$or) &&
-      query.$or.some((s: any) => s?.recipientKeyFingerprints != null || s?.recipientRoutingKeyFingerprint != null)
+      query.$or.some((s) => s?.recipientKeyFingerprints != null || s?.recipientRoutingKeyFingerprint != null)
+
     if (isOobRecipientQuery && filtered.length > 1) {
-      filtered = filtered.sort((a, b) => {
-        const ta = a.data?.createdAt ?? a.data?.updatedAt ?? 0
-        const tb = b.data?.createdAt ?? b.data?.updatedAt ?? 0
-        return tb - ta
-      }).slice(0, 1)
+      filtered = filtered
+        .sort((a, b) => this.parseDate(b.data?.createdAt ?? b.data?.updatedAt) - this.parseDate(a.data?.createdAt ?? a.data?.updatedAt))
+        .slice(0, 1)
     }
-    return filtered.map((item: { id: string; data: any }) =>
-      this.ensureRecordInstance(JsonTransformer.fromJSON(item.data, recordClass), recordClass)
-    )
+
+    return filtered
+      .map((item) => this.ensureRecordInstance(JsonTransformer.fromJSON(item.data, recordClass), recordClass))
+      .filter((r): r is T => r !== null)
   }
 }

@@ -1,62 +1,60 @@
 import { Injectable } from '@nestjs/common'
 import { openStorageDb } from './db'
+import type { RecordData, RecordItem, SaveResult, OkResult } from './types/record.types'
 
-/**
- * Servicio de persistencia de registros del wallet-service.
- *
- * Tabla records(type, id, data). Los agentes Credo usan ExternalWalletStorageService
- * que traduce save/update con toJSON y getById/getAll con fromJSON.
- */
+interface RawRow {
+  id: string
+  data: string
+}
+
 @Injectable()
 export class StorageService {
   private dbPromise = openStorageDb(process.env.WALLET_SQLITE_PATH)
 
-  /** Inserta o reemplaza. keyId = id o UUID. Retorna { id }. */
-  async save(type: string, id: string | undefined, data: any) {
+  async save(type: string, id: string | undefined, data: RecordData): Promise<SaveResult> {
     const db = await this.dbPromise
     const keyId = id || require('crypto').randomUUID()
-    await db.run('INSERT OR REPLACE INTO records (type, id, data) VALUES (?, ?, ?)', [type, keyId, JSON.stringify(data)])
+    await db.run(
+      'INSERT OR REPLACE INTO records (type, id, data) VALUES (?, ?, ?)',
+      [type, keyId, JSON.stringify(data)],
+    )
     return { id: keyId }
   }
 
-  /** Retorna data parseada o null si no existe. */
-  async getById(type: string, id: string) {
+  async getById(type: string, id: string): Promise<RecordData | null> {
     const db = await this.dbPromise
-    const row = await db.get('SELECT data FROM records WHERE type = ? AND id = ?', [type, id])
-    return row ? JSON.parse(row.data) : null
+    const row = await db.get('SELECT data FROM records WHERE type = ? AND id = ?', [type, id]) as { data: string } | undefined
+    return row ? JSON.parse(row.data) as RecordData : null
   }
 
-  /** Lista registros por type. Retorna [{ id, data }]. */
-  async getAll(type: string) {
+  async getAll(type: string): Promise<RecordItem[]> {
     const db = await this.dbPromise
-    const rows = await db.all('SELECT id, data FROM records WHERE type = ?', [type])
-    return rows.map((r: any) => ({ id: r.id, data: JSON.parse(r.data) }))
+    const rows = await db.all('SELECT id, data FROM records WHERE type = ?', [type]) as RawRow[]
+    return rows.map((r) => ({ id: r.id, data: JSON.parse(r.data) as RecordData }))
   }
 
-  /** Lista solo los ids de un type (para debug). */
   async getIdsByType(type: string): Promise<string[]> {
     const db = await this.dbPromise
-    const rows = await db.all('SELECT id FROM records WHERE type = ?', [type])
-    return rows.map((r: any) => r.id)
+    const rows = await db.all('SELECT id FROM records WHERE type = ?', [type]) as Array<{ id: string }>
+    return rows.map((r) => r.id)
   }
 
-  /** Actualiza data de un registro existente. */
-  async update(type: string, id: string, data: any) {
+  async update(type: string, id: string, data: RecordData): Promise<OkResult> {
     const db = await this.dbPromise
-    await db.run('UPDATE records SET data = ? WHERE type = ? AND id = ?', [JSON.stringify(data), type, id])
+    await db.run(
+      'UPDATE records SET data = ? WHERE type = ? AND id = ?',
+      [JSON.stringify(data), type, id],
+    )
     return { ok: true }
   }
 
-  /** Elimina un registro por type e id. */
-  async delete(type: string, id: string) {
+  async delete(type: string, id: string): Promise<OkResult> {
     const db = await this.dbPromise
     await db.run('DELETE FROM records WHERE type = ? AND id = ?', [type, id])
     return { ok: true }
   }
 
-  /** Query por type. Actualmente delega en getAll. */
-  async query(type: string) {
+  async query(type: string): Promise<RecordItem[]> {
     return this.getAll(type)
   }
 }
-

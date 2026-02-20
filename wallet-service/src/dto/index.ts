@@ -1,0 +1,6 @@
+export { SaveRecordDto } from './save-record.dto'
+export { UpdateRecordDto } from './update-record.dto'
+export { UpdateRecordBodyDto } from './update-record-body.dto'
+export { GetRecordDto } from './get-record.dto'
+export { DeleteRecordDto } from './delete-record.dto'
+export { QueryRecordDto } from './query-record.dto'
