@@ -23,6 +23,7 @@ export const receiveInvitation = async (invitationUrl: string) => {
   const { outOfBandRecord } = await (holderAgent as any).didcomm.oob.receiveInvitationFromUrl(normalizedUrl, {
     label: agentLabel,
     ourDid: getHolderDid(),
+    reuseConnection: true,
   })
   return outOfBandRecord
 }

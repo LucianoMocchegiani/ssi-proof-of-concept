@@ -62,8 +62,10 @@ services:
       DIDCOMM_PORT: 3000
       KMS_MODE: "external"
       EXTERNAL_KMS_URL: http://kms-service:4001
+      INTERNAL_KMS_SQLITE_PATH: /app/data/internal-kms.sqlite
       WALLET_MODE: "external"
       EXTERNAL_WALLET_URL: http://wallet-service:4002
+      INTERNAL_WALLET_SQLITE_PATH: /app/data/internal-wallet.sqlite
       VDR_SERVICE_URL: http://vdr-service:4003
     volumes:
       - issuer-kms-data:/app/data
@@ -82,9 +84,11 @@ services:
       PORT: 9005
       SERVICE_HOST: holder-service
       DIDCOMM_ENDPOINT: ws://holder-service:9005
-      KMS_MODE: "internal"
+      KMS_MODE: "external"
+      EXTERNAL_KMS_URL: http://kms-service:4001
       INTERNAL_KMS_SQLITE_PATH: /app/data/internal-kms.sqlite
-      WALLET_MODE: "internal"
+      WALLET_MODE: "external"
+      EXTERNAL_WALLET_URL: http://wallet-service:4002
       INTERNAL_WALLET_SQLITE_PATH: /app/data/internal-wallet.sqlite
       VDR_SERVICE_URL: http://vdr-service:4003
     volumes:
@@ -107,8 +111,10 @@ services:
       DIDCOMM_ENDPOINT: ws://verifier-service:9004
       KMS_MODE: "external"
       EXTERNAL_KMS_URL: http://kms-service:4001
+      INTERNAL_KMS_SQLITE_PATH: /app/data/internal-kms.sqlite
       WALLET_MODE: "external"
       EXTERNAL_WALLET_URL: http://wallet-service:4002
+      INTERNAL_WALLET_SQLITE_PATH: /app/data/internal-wallet.sqlite
       VDR_SERVICE_URL: http://vdr-service:4003
     volumes:
       - verifier-kms-data:/app/data
