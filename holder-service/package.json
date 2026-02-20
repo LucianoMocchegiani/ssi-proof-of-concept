@@ -18,13 +18,16 @@
     "better-sqlite3": "^12.6.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
+    "ed2curve": "^0.3.0",
     "node-fetch": "^2.6.7",
     "reflect-metadata": "^0.1.13",
     "sqlite": "^4.1.2",
-    "sqlite3": "^5.1.6"
+    "sqlite3": "^5.1.6",
+    "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/ed2curve": "^0.2.4",
     "@types/node": "^18.0.0",
     "patch-package": "^8.0.1",
     "ts-node": "^10.9.1",
