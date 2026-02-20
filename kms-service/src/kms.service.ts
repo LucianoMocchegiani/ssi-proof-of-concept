@@ -1,14 +1,21 @@
 import { Injectable } from '@nestjs/common'
-import { createPrivateKey, createPublicKey, sign as cryptoSign, verify as cryptoVerify, createHash, createCipheriv, createDecipheriv } from 'crypto'
+import { createPrivateKey, createPublicKey, sign as cryptoSign, verify as cryptoVerify, createHash, createCipheriv, createDecipheriv, type JsonWebKey } from 'crypto'
 import { openKmsDb } from './db'
 import { generateKeyPairSync, randomBytes } from 'crypto'
 import { generateBls12381G2KeyPair, blsSign } from '@mattrglobal/bbs-signatures'
 import * as bs58 from 'bs58'
 import * as ed2curve from 'ed2curve'
 import * as nacl from 'tweetnacl'
+import type {
+  Ed25519PublicJwk, Ed25519PrivateJwk, SymmetricJwk, ImportablePrivateJwk,
+  SupportedKeyType, KeyRow, BlsPublicBlob, BlsPrivateBlob, BlsPublicKeyResult,
+  CreateKeyResultEd25519, CreateKeyResultBls, ImportKeyResult,
+  EncryptResult, DecryptResult, KeyDebugEntry,
+  KeyAgreementParams, EncryptDecryptKey, EncryptionOptions, EncryptBody, DecryptBody,
+} from './types'
 
 /** RFC 7638: JWK thumbprint = base64url(SHA-256(canonical JWK)). Claves en orden lexicográfico. */
-function jwkThumbprint(jwk: { kty: string; crv?: string; x?: string; [k: string]: any }): string {
+function jwkThumbprint(jwk: { kty: string; crv?: string; x?: string }): string {
   const parts: [string, string][] = []
   if (jwk.crv) parts.push(['crv', jwk.crv])
   parts.push(['kty', jwk.kty])
@@ -79,25 +86,25 @@ export class KmsService {
   private dbPromise = openKmsDb(process.env.KMS_SQLITE_PATH)
 
   /** Crea par Ed25519 o Bls12381G2. type: 'Ed25519' | 'Bls12381G2'. Retorna keyId, publicJwk (Ed25519) o { publicKeyBase58 } (BLS). */
-  async createKey(keyId?: string, type: 'Ed25519' | 'Bls12381G2' = 'Ed25519') {
+  async createKey(keyId?: string, type: SupportedKeyType = 'Ed25519'): Promise<CreateKeyResultEd25519 | CreateKeyResultBls> {
     const id = keyId || require('crypto').randomUUID()
     const db = await this.dbPromise
 
     if (type === 'Bls12381G2') {
       const keyPair = await generateBls12381G2KeyPair()
       const publicKeyBase58 = bs58.encode(Buffer.from(keyPair.publicKey))
-      const publicBlob = JSON.stringify({
+      const publicBlob: BlsPublicBlob = {
         keyType: 'Bls12381G2',
         publicKeyBase58,
         publicKeyBase64: Buffer.from(keyPair.publicKey).toString('base64'),
-      })
-      const privateBlob = JSON.stringify({
+      }
+      const privateBlob: BlsPrivateBlob = {
         keyType: 'Bls12381G2',
         secretKeyBase64: Buffer.from(keyPair.secretKey).toString('base64'),
-      })
+      }
       await db.run(
         'INSERT OR REPLACE INTO keys (id, keyType, publicJwk, privateJwk) VALUES (?, ?, ?, ?)',
-        [id, 'Bls12381G2', publicBlob, privateBlob]
+        [id, 'Bls12381G2', JSON.stringify(publicBlob), JSON.stringify(privateBlob)]
       )
       return { keyId: id, publicKeyBase58, publicJwk: null }
     }
@@ -111,22 +118,21 @@ export class KmsService {
       'INSERT OR REPLACE INTO keys (id, keyType, publicJwk, privateJwk) VALUES (?, ?, ?, ?)',
       [id, 'Ed25519', JSON.stringify(publicJwk), JSON.stringify(privateJwk)]
     )
-    return { keyId: id, publicJwk }
+    return { keyId: id, publicJwk: publicJwk as unknown as Ed25519PublicJwk }
   }
 
   /** Resuelve keyId: por id directo, JWK thumbprint (RFC 7638) o fingerprint multibase (z6M/z6L). Credo puede pasar cualquiera. */
   private async resolveKeyId(id: string): Promise<string | null> {
     const db = await this.dbPromise
-    const row = await db.get('SELECT id FROM keys WHERE id = ?', [id])
-    if (row) return (row as { id: string }).id
-    // Extraer fragmento si viene como did:xxx#z6M... o #z6M...
+    const row = await db.get('SELECT id FROM keys WHERE id = ?', [id]) as Pick<KeyRow, 'id'> | undefined
+    if (row) return row.id
     const fingerprint = id.includes('#') ? id.split('#').pop()! : id
     const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (uuidLike.test(fingerprint)) return null
-    const rows = await db.all('SELECT id, publicJwk FROM keys WHERE keyType = ?', ['Ed25519'])
+    const rows = await db.all('SELECT id, publicJwk FROM keys WHERE keyType = ?', ['Ed25519']) as Pick<KeyRow, 'id' | 'publicJwk'>[]
     const debug: string[] = []
-    for (const r of rows as { id: string; publicJwk: string }[]) {
-      const jwk = JSON.parse(r.publicJwk) as { kty: string; crv?: string; x?: string }
+    for (const r of rows) {
+      const jwk = JSON.parse(r.publicJwk) as Ed25519PublicJwk
       const tpEd = jwkThumbprint(jwk)
       const tpX = jwkToX25519Thumbprint(jwk)
       if (tpEd === fingerprint) return r.id
@@ -144,11 +150,11 @@ export class KmsService {
   }
 
   /** DEBUG: Lista todas las claves Ed25519 con sus thumbprints (Ed25519 y X25519). */
-  async listKeysDebug() {
+  async listKeysDebug(): Promise<KeyDebugEntry[]> {
     const db = await this.dbPromise
-    const rows = await db.all('SELECT id, publicJwk FROM keys WHERE keyType = ?', ['Ed25519'])
-    return (rows as { id: string; publicJwk: string }[]).map((r) => {
-      const jwk = JSON.parse(r.publicJwk) as { kty: string; crv?: string; x?: string }
+    const rows = await db.all('SELECT id, publicJwk FROM keys WHERE keyType = ?', ['Ed25519']) as Pick<KeyRow, 'id' | 'publicJwk'>[]
+    return rows.map((r) => {
+      const jwk = JSON.parse(r.publicJwk) as Ed25519PublicJwk
       return {
         id: r.id,
         tpEd25519: jwkThumbprint(jwk),
@@ -159,33 +165,32 @@ export class KmsService {
   }
 
   /** Obtiene la clave pública (JWK Ed25519 o { publicKeyBase58 } BLS) por keyId o thumbprint. Retorna null si no existe. */
-  async getPublicKey(id: string) {
+  async getPublicKey(id: string): Promise<Ed25519PublicJwk | BlsPublicKeyResult | null> {
     console.warn('[kms] getPublicKey CALLED id=', id)
     const keyId = await this.resolveKeyId(id)
     if (!keyId) {
       const db = await this.dbPromise
-      const count = await db.get('SELECT count(*) as c FROM keys WHERE keyType = ?', ['Ed25519']) as { c: number }
+      const count = await db.get('SELECT count(*) as c FROM keys WHERE keyType = ?', ['Ed25519']) as { c: number } | undefined
       console.warn('[kms] getPublicKey FAIL id=', id, 'ed25519Keys=', count?.c ?? 0)
       return null
     }
     console.warn('[kms] getPublicKey OK id=', id?.slice?.(0, 30), '-> keyId=', keyId)
     const db = await this.dbPromise
-    const row = await db.get('SELECT keyType, publicJwk FROM keys WHERE id = ?', [keyId])
+    const row = await db.get('SELECT keyType, publicJwk FROM keys WHERE id = ?', [keyId]) as Pick<KeyRow, 'keyType' | 'publicJwk'> | undefined
     if (!row) return null
-    const data = row as { keyType?: string | null; publicJwk: string }
-    if (data.keyType === 'Bls12381G2') {
-      const blob = JSON.parse(data.publicJwk)
+    if (row.keyType === 'Bls12381G2') {
+      const blob = JSON.parse(row.publicJwk) as BlsPublicBlob
       return { keyType: 'Bls12381G2', publicKeyBase58: blob.publicKeyBase58 }
     }
-    const jwk = JSON.parse(data.publicJwk)
+    const jwk = JSON.parse(row.publicJwk) as Ed25519PublicJwk
     jwk.kid = keyId
     return jwk
   }
 
   /** Importa clave privada JWK. Deriva publicJwk eliminando 'd'. */
-  async importKey(privateJwk: any) {
+  async importKey(privateJwk: ImportablePrivateJwk): Promise<ImportKeyResult> {
     const kid = privateJwk.kid || require('crypto').randomUUID()
-    const publicJwk = Object.assign({}, privateJwk)
+    const publicJwk: Record<string, unknown> = { ...privateJwk }
     delete publicJwk.d
     publicJwk.kid = kid
     const db = await this.dbPromise
@@ -210,11 +215,11 @@ export class KmsService {
     const resolved = await this.resolveKeyId(keyId)
     const id = resolved ?? keyId
     const db = await this.dbPromise
-    const row = await db.get('SELECT privateJwk FROM keys WHERE id = ?', [id])
+    const row = await db.get('SELECT privateJwk FROM keys WHERE id = ?', [id]) as Pick<KeyRow, 'privateJwk'> | undefined
     if (!row) throw new Error(`Key ${keyId} not found`)
 
-    const privateJwk = JSON.parse(row.privateJwk)
-    const keyObject = createPrivateKey({ key: privateJwk, format: 'jwk' })
+    const privateJwk = JSON.parse(row.privateJwk) as Ed25519PrivateJwk
+    const keyObject = createPrivateKey({ key: privateJwk as unknown as JsonWebKey, format: 'jwk' })
     const dataBuffer = typeof data === 'string' ? Buffer.from(data, 'base64') : data
     const signature = cryptoSign(null, dataBuffer, keyObject)
     return signature.toString('base64')
@@ -225,11 +230,11 @@ export class KmsService {
     const resolved = await this.resolveKeyId(keyId)
     const id = resolved ?? keyId
     const db = await this.dbPromise
-    const row = await db.get('SELECT publicJwk FROM keys WHERE id = ?', [id])
+    const row = await db.get('SELECT publicJwk FROM keys WHERE id = ?', [id]) as Pick<KeyRow, 'publicJwk'> | undefined
     if (!row) throw new Error(`Key ${keyId} not found`)
 
-    const publicJwk = JSON.parse(row.publicJwk)
-    const keyObject = createPublicKey({ key: publicJwk, format: 'jwk' })
+    const publicJwk = JSON.parse(row.publicJwk) as Ed25519PublicJwk
+    const keyObject = createPublicKey({ key: publicJwk as unknown as JsonWebKey, format: 'jwk' })
     const dataBuffer = typeof data === 'string' ? Buffer.from(data, 'base64') : data
     const sigBuffer = typeof signature === 'string' ? Buffer.from(signature, 'base64') : signature
     return cryptoVerify(null, dataBuffer, keyObject, sigBuffer)
@@ -239,12 +244,12 @@ export class KmsService {
    * Cifrado real para DIDComm: keyAgreement (ECDH X25519 + XSalsa20-Poly1305) o symmetric (C20P/ChaCha20-Poly1305).
    * Body: { key: { keyAgreement?: { keyId, externalPublicJwk } | privateJwk?: { kty:'oct', k } }, encryption: { algorithm, aad? }, data: base64 }
    */
-  async encrypt(body: any) {
+  async encrypt(body: EncryptBody): Promise<EncryptResult> {
     const data = this.b64ToBuf(body.data)
     if (!data) throw new Error('encrypt: data required')
 
-    const key = body.key
-    const encOpts = body.encryption || {}
+    const key = body.key as EncryptDecryptKey
+    const encOpts: EncryptionOptions = body.encryption || {}
     const algorithm = encOpts.algorithm || 'XSALSA20-POLY1305'
 
     if (key?.keyAgreement) {
@@ -264,7 +269,7 @@ export class KmsService {
     throw new Error('encrypt: key.keyAgreement or key.privateJwk (oct) required')
   }
 
-  private async encryptKeyAgreement(keyAgreement: any, data: Uint8Array, _algorithm: string) {
+  private async encryptKeyAgreement(keyAgreement: KeyAgreementParams, data: Uint8Array, _algorithm: string): Promise<EncryptResult> {
     const keyId = keyAgreement.keyId
     const externalPublicJwk = keyAgreement.externalPublicJwk
     if (!externalPublicJwk?.x) throw new Error('encrypt: externalPublicJwk required')
@@ -272,17 +277,18 @@ export class KmsService {
     if (theirPublicX25519.length !== 32) throw new Error('encrypt: externalPublicJwk.x must be 32 bytes')
 
     let x25519Secret: Uint8Array
+    let ephemeralPub: Buffer | undefined
     let isAnoncrypt = false
 
     if (keyId) {
       const db = await this.dbPromise
       const resolvedKeyId = await this.resolveKeyId(keyId)
       const id = resolvedKeyId || keyId
-      const row = await db.get('SELECT privateJwk, publicJwk FROM keys WHERE id = ? AND keyType = ?', [id, 'Ed25519'])
+      const row = await db.get('SELECT privateJwk, publicJwk FROM keys WHERE id = ? AND keyType = ?', [id, 'Ed25519']) as Pick<KeyRow, 'privateJwk' | 'publicJwk'> | undefined
       if (!row) throw new Error(`Key ${keyId} not found`)
 
-      const privJwk = JSON.parse((row as any).privateJwk)
-      const pubJwk = JSON.parse((row as any).publicJwk)
+      const privJwk = JSON.parse(row.privateJwk) as Ed25519PrivateJwk
+      const pubJwk = JSON.parse(row.publicJwk) as Ed25519PublicJwk
       const ed25519Secret = Buffer.concat([
         Buffer.from(privJwk.d, 'base64url'),
         Buffer.from(pubJwk.x, 'base64url'),
@@ -295,15 +301,15 @@ export class KmsService {
       isAnoncrypt = true
       const ephemeral = nacl.box.keyPair()
       x25519Secret = ephemeral.secretKey
-      var ephemeralPub = Buffer.from(ephemeral.publicKey)
+      ephemeralPub = Buffer.from(ephemeral.publicKey)
     }
 
     const nonce = randomBytes(24)
     const boxed = nacl.box(data, nonce, theirPublicX25519 as Uint8Array, x25519Secret)
     if (!boxed) throw new Error('encrypt: nacl.box failed')
 
-    if (isAnoncrypt) {
-      const encrypted = Buffer.concat([ephemeralPub!, nonce, Buffer.from(boxed)])
+    if (isAnoncrypt && ephemeralPub) {
+      const encrypted = Buffer.concat([ephemeralPub, nonce, Buffer.from(boxed)])
       return { encrypted: encrypted.toString('base64'), iv: undefined, tag: undefined }
     }
     return {
@@ -313,7 +319,7 @@ export class KmsService {
     }
   }
 
-  private encryptSymmetric(privateJwk: { kty?: string; k: string }, data: Uint8Array, encOpts: any) {
+  private encryptSymmetric(privateJwk: SymmetricJwk, data: Uint8Array, encOpts: EncryptionOptions): EncryptResult {
     if (privateJwk.kty !== 'oct' || !privateJwk.k) throw new Error('encrypt: privateJwk kty oct with k required')
     const key = Buffer.from(privateJwk.k, 'base64url')
     if (key.length !== 32) throw new Error('encrypt: symmetric key must be 32 bytes')
@@ -332,7 +338,7 @@ export class KmsService {
     }
   }
 
-  private b64ToBuf(v: any): Buffer | null {
+  private b64ToBuf(v: unknown): Buffer | null {
     if (v == null) return null
     if (Buffer.isBuffer(v)) return v
     if (typeof v === 'string') return Buffer.from(v, 'base64')
@@ -340,15 +346,14 @@ export class KmsService {
     return null
   }
 
-  async decrypt(body: any) {
+  async decrypt(body: DecryptBody): Promise<DecryptResult> {
     const encrypted = this.b64ToBuf(body.encrypted)
     const iv = this.b64ToBuf(body.iv)
     const tag = body.tag ? this.b64ToBuf(body.tag) : undefined
     if (!encrypted) throw new Error('decrypt: encrypted required')
 
-    const key = body.key
-    const encOpts = body.encryption || {}
-    const algorithm = encOpts.algorithm || 'XSALSA20-POLY1305'
+    const key = body.key as EncryptDecryptKey
+    const encOpts: EncryptionOptions = body.encryption || {}
 
     if (key?.keyAgreement) {
       return this.decryptKeyAgreement(key.keyAgreement, encrypted, iv)
@@ -359,18 +364,18 @@ export class KmsService {
     throw new Error('decrypt: key.keyAgreement or key.privateJwk (oct) required')
   }
 
-  private async decryptKeyAgreement(keyAgreement: any, encrypted: Uint8Array, nonce: Buffer | null) {
+  private async decryptKeyAgreement(keyAgreement: KeyAgreementParams, encrypted: Uint8Array, nonce: Buffer | null): Promise<DecryptResult> {
     const keyId = keyAgreement.keyId
     if (!keyId) throw new Error('decrypt: keyAgreement.keyId required')
 
     const db = await this.dbPromise
     const resolvedKeyId = await this.resolveKeyId(keyId)
     const id = resolvedKeyId || keyId
-    const row = await db.get('SELECT privateJwk, publicJwk FROM keys WHERE id = ? AND keyType = ?', [id, 'Ed25519'])
+    const row = await db.get('SELECT privateJwk, publicJwk FROM keys WHERE id = ? AND keyType = ?', [id, 'Ed25519']) as Pick<KeyRow, 'privateJwk' | 'publicJwk'> | undefined
     if (!row) throw new Error(`Key ${keyId} not found`)
 
-    const privJwk = JSON.parse((row as any).privateJwk)
-    const pubJwk = JSON.parse((row as any).publicJwk)
+    const privJwk = JSON.parse(row.privateJwk) as Ed25519PrivateJwk
+    const pubJwk = JSON.parse(row.publicJwk) as Ed25519PublicJwk
     const ed25519Secret = Buffer.concat([
       Buffer.from(privJwk.d, 'base64url'),
       Buffer.from(pubJwk.x, 'base64url'),
@@ -396,7 +401,7 @@ export class KmsService {
     return { data: Buffer.from(opened).toString('base64') }
   }
 
-  private decryptSymmetric(privateJwk: { kty?: string; k: string }, encrypted: Buffer, iv: Buffer | null | undefined, tag: Buffer | null | undefined, encOpts: any) {
+  private decryptSymmetric(privateJwk: SymmetricJwk, encrypted: Buffer, iv: Buffer | null | undefined, tag: Buffer | null | undefined, encOpts: EncryptionOptions): DecryptResult {
     if (privateJwk.kty !== 'oct' || !privateJwk.k) throw new Error('decrypt: privateJwk kty oct with k required')
     if (!iv || iv.length !== 12) throw new Error('decrypt: iv (12 bytes) required')
     const key = Buffer.from(privateJwk.k, 'base64url')
@@ -413,9 +418,9 @@ export class KmsService {
   /** Firma verifyData (hash SHA-256 de N-Quads) con clave BLS. keyId debe ser Bls12381G2. Retorna proofValue en base64url. */
   async signBbs(keyId: string, data: Buffer | string): Promise<string> {
     const db = await this.dbPromise
-    const row = await db.get('SELECT keyType, publicJwk, privateJwk FROM keys WHERE id = ?', [keyId])
+    const row = await db.get('SELECT keyType, publicJwk, privateJwk FROM keys WHERE id = ?', [keyId]) as KeyRow | undefined
     if (!row) throw new Error(`Key ${keyId} not found`)
-    const r = row as { keyType: string; publicJwk: string; privateJwk: string }
+    const r = row
     if (r.keyType !== 'Bls12381G2') throw new Error(`Key ${keyId} is not Bls12381G2`)
 
     const pubBlob = JSON.parse(r.publicJwk)
