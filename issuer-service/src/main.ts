@@ -3,9 +3,10 @@ import { Logger, ValidationPipe } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from './app.module'
 import { envConfig } from './config'
-import { initializeIssuerAgent, ensureIssuerDid } from './agent/agent-issuer'
+import { initializeIssuerAgent, ensureIssuerDid, ensureStatusList } from './agent/agent-issuer'
 import { setIssuerAgent } from './agent/agent-store'
 import { setIssuerDid } from './agent/issuer-did-store'
+import { setStatusList } from './agent/issuer-status-list-store'
 import { WebSocketServer } from 'ws'
 
 const logger = new Logger('Issuer')
@@ -31,7 +32,9 @@ async function bootstrap() {
   setIssuerAgent(agent)
   const did = await ensureIssuerDid(agent)
   setIssuerDid(did)
-  logger.log(`Agent initialized did=${did}`)
+  const sl = await ensureStatusList(did)
+  setStatusList(sl)
+  logger.log(`Agent initialized did=${did} statusList=${sl.id}`)
   logger.log(`Listening on ${port} (API + DIDComm WebSocket)`)
 }
 

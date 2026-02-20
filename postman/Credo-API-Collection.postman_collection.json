@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Credo - Credenciales Verificables",
-    "description": "Colección para Credo (DIDComm). Incluye flujos de emisión, presentación y verificación.\n\n**Flujos:**\n- Issuer-iniciado: Issuer ofrece la credencial tras la conexión\n- Holder-iniciado: Holder propone, Issuer acepta y ofrece\n- Present Proof: Verifier solicita prueba, Holder presenta credencial(es)\n\n**Variables:** issuer_base, holder_base, verifier_base, invitationUrl, connectionId, holderDid",
+    "description": "Colección para Credo (DIDComm). Incluye flujos de emisión, presentación, verificación y revocación.\n\n**Flujos:**\n- 1. Issuer-iniciado: Issuer ofrece la credencial tras la conexión\n- 2. Holder-iniciado: Holder propone, Issuer acepta y ofrece\n- 3. Present Proof: Verifier solicita prueba, Holder presenta credencial(es)\n- 4. Revocación: Issuer revoca, Holder consulta, Verifier rechaza\n\n**Variables:** issuer_base, holder_base, verifier_base, invitationUrl, connectionId, holderDid, credentialId",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -13,7 +13,8 @@
     { "key": "kms_base", "value": "http://localhost:4001" },
     { "key": "invitationUrl", "value": "" },
     { "key": "connectionId", "value": "" },
-    { "key": "holderDid", "value": "" }
+    { "key": "holderDid", "value": "" },
+    { "key": "credentialId", "value": "" }
   ],
   "item": [
     {
@@ -90,16 +91,49 @@
               "raw": "{\n  \"connectionId\": \"{{connectionId}}\",\n  \"credential\": {\n    \"credentialSubject\": {\n      \"id\": \"{{holderDid}}\",\n      \"name\": \"Juan Pérez\",\n      \"email\": \"juan@ejemplo.com\"\n    },\n    \"type\": [\"GenericCredential\"]\n  },\n  \"proofType\": \"Ed25519Signature2018\"\n}"
             },
             "url": "{{issuer_base}}/offer-credential",
-            "description": "Issuer envía Offer. El Holder acepta automáticamente. Requiere 1.3."
-          }
+            "description": "Issuer envía Offer. El Holder acepta automáticamente. El script guarda statusListIndex para poder revocar después."
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.credentialId) {",
+                "  pm.collectionVariables.set('credentialId', res.credentialId);",
+                "  console.log('credentialId guardado: ' + res.credentialId);",
+                "}",
+                "if (res.credentialExchangeId) {",
+                "  console.log('Credential exchange: ' + res.credentialExchangeId + ' state: ' + res.state);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
         },
         {
           "name": "1.5 Holder - Listar credenciales",
           "request": {
             "method": "GET",
             "url": "{{holder_base}}/credentials",
-            "description": "Lista credenciales verificables (objeto VC por credencial)."
-          }
+            "description": "Lista credenciales verificables. El script guarda credentialId de la primera credencial para consultar estado."
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.credentials && res.credentials.length > 0) {",
+                "  const cred = res.credentials[0];",
+                "  if (cred.id) {",
+                "    pm.collectionVariables.set('credentialId', cred.id);",
+                "    console.log('credentialId guardado: ' + cred.id);",
+                "  }",
+                "  console.log('Total credenciales: ' + res.credentials.length);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
         }
       ]
     },
@@ -272,7 +306,146 @@
       ]
     },
     {
-      "name": "4. Issuer Service (puerto 3000)",
+      "name": "4. Flujo Revocación (Issuer revoca, Verifier rechaza)",
+      "description": "Flujo completo de revocación. Requiere haber ejecutado el flujo 1 (o 2) para tener una credencial emitida.\n\nSolo se necesita el credentialId (urn:uuid:xxx) de la credencial a revocar. El issuer resuelve automáticamente el statusListIndex desde el mapeo en el VDR.\n\nPasos:\n1. Listar credenciales y obtener credentialId\n2. Consultar que aún NO está revocada\n3. Revocar la credencial desde el Issuer (enviando credentialId)\n4. Confirmar que ahora SÍ está revocada\n5. Presentar la credencial revocada al Verifier → será rechazada",
+      "item": [
+        {
+          "name": "4.1 Holder - Listar credenciales (obtener credentialId)",
+          "request": {
+            "method": "GET",
+            "url": "{{holder_base}}/credentials",
+            "description": "Lista credenciales del holder. El script guarda el credentialId (urn:uuid:xxx) de la primera credencial."
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.credentials && res.credentials.length > 0) {",
+                "  const cred = res.credentials[0];",
+                "  if (cred.id) {",
+                "    pm.collectionVariables.set('credentialId', cred.id);",
+                "    console.log('credentialId guardado: ' + cred.id);",
+                "  }",
+                "  console.log('Total credenciales: ' + res.credentials.length);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "4.2 Holder - Consultar estado (antes de revocar)",
+          "request": {
+            "method": "GET",
+            "url": "{{holder_base}}/credential-status/{{credentialId}}",
+            "description": "Consulta al VDR si la credencial fue revocada. Debería devolver { revoked: false }."
+          }
+        },
+        {
+          "name": "4.3 Issuer - Revocar credencial",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credentialId\": \"{{credentialId}}\"\n}"
+            },
+            "url": "{{issuer_base}}/revoke-credential",
+            "description": "Issuer revoca la credencial por credentialId. El servicio resuelve automáticamente el statusListIndex a través del mapeo en el VDR y flipea el bit correspondiente."
+          }
+        },
+        {
+          "name": "4.4 Holder - Consultar estado (después de revocar)",
+          "request": {
+            "method": "GET",
+            "url": "{{holder_base}}/credential-status/{{credentialId}}",
+            "description": "Consulta al VDR nuevamente. Ahora debería devolver { revoked: true }."
+          }
+        },
+        {
+          "name": "4.5 Verifier - Crear invitación",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{verifier_base}}/create-invitation",
+            "description": "Verifier genera invitación para verificar la credencial revocada."
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.invitation) {",
+                "  pm.collectionVariables.set('invitationUrl', res.invitation);",
+                "  console.log('invitationUrl (verifier) guardada');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "4.6 Holder - Recibir invitación (del Verifier)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitationUrl\": \"{{invitationUrl}}\"\n}"
+            },
+            "url": "{{holder_base}}/receive-invitation",
+            "description": "Holder recibe invitación del Verifier. Esperar ~5s antes del siguiente paso."
+          }
+        },
+        {
+          "name": "4.7 Verifier - Listar conexiones",
+          "request": {
+            "method": "GET",
+            "url": "{{verifier_base}}/connections",
+            "description": "Obtener connectionId para solicitar proof."
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.connections && res.connections.length > 0) {",
+                "  const c = res.connections.find(x => x.state === 'completed') || res.connections[0];",
+                "  pm.collectionVariables.set('connectionId', c.id);",
+                "  console.log('connectionId (verifier) guardado');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "4.8 Verifier - Solicitar proof (credencial revocada)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"connectionId\": \"{{connectionId}}\"\n}"
+            },
+            "url": "{{verifier_base}}/request-proof",
+            "description": "Verifier solicita proof. El Holder envía la credencial revocada. El Verifier la detecta como REVOKED y la rechaza.\n\nVerificar en las consolas:\n- Verifier: banner ⊘ REVOKED\n- Holder: banner ⊘ REVOKED (si recibió el problem-report)"
+          }
+        },
+        {
+          "name": "4.9 Verifier - Listar proofs",
+          "request": {
+            "method": "GET",
+            "url": "{{verifier_base}}/proofs",
+            "description": "Lista intercambios de proof para verificar el resultado. La credencial revocada debería aparecer como rechazada (abandoned)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Issuer Service (puerto 3000)",
       "item": [
         {
           "name": "Health",
@@ -310,11 +483,24 @@
             },
             "url": "{{issuer_base}}/offer-credential"
           }
+        },
+        {
+          "name": "Revoke credential",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credentialId\": \"{{credentialId}}\"\n}"
+            },
+            "url": "{{issuer_base}}/revoke-credential",
+            "description": "Revoca una credencial por credentialId (urn:uuid:xxx). Resuelve automáticamente el statusListIndex desde el VDR."
+          }
         }
       ]
     },
     {
-      "name": "5. Holder Service (puerto 9005)",
+      "name": "6. Holder Service (puerto 9005)",
       "item": [
         {
           "name": "Health",
@@ -350,12 +536,24 @@
         },
         {
           "name": "List credentials",
-          "request": { "method": "GET", "url": "{{holder_base}}/credentials", "description": "Lista todas las credenciales con detalle (id, type, issuer, credentialSubject, credential)." }
+          "request": { "method": "GET", "url": "{{holder_base}}/credentials", "description": "Lista todas las credenciales (solo datos, sin estado de revocación)." }
+        },
+        {
+          "name": "List credentials with status",
+          "request": { "method": "GET", "url": "{{holder_base}}/credentials-status", "description": "Lista todas las credenciales con su estado de revocación. Cada entrada tiene: id, revoked (true/false/null), credential. null = sin mapeo en VDR." }
+        },
+        {
+          "name": "Check credential status",
+          "request": {
+            "method": "GET",
+            "url": "{{holder_base}}/credential-status/{{credentialId}}",
+            "description": "Consulta si una credencial almacenada fue revocada. Requiere el credentialId (ej: urn:uuid:xxx). Retorna { revoked: true/false }."
+          }
         }
       ]
     },
     {
-      "name": "6. Verifier Service (puerto 9004)",
+      "name": "7. Verifier Service (puerto 9004)",
       "item": [
         {
           "name": "Health",
@@ -394,7 +592,7 @@
       ]
     },
     {
-      "name": "7. Storage Service (puerto 4002)",
+      "name": "8. Storage Service (puerto 4002)",
       "item": [
         {
           "name": "Health",
@@ -455,7 +653,7 @@
       ]
     },
     {
-      "name": "8. VDR Service (puerto 4003)",
+      "name": "9. VDR Service (puerto 4003)",
       "item": [
         {
           "name": "Health",
@@ -496,12 +694,13 @@
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": { "mode": "raw", "raw": "{\n  \"issuerId\": \"did:custom:issuer1\"\n}" },
-            "url": "{{vdr_base}}/status/list"
+            "url": "{{vdr_base}}/status/list",
+            "description": "Crea una nueva StatusList para un issuer. Retorna { id, url }."
           }
         },
         {
           "name": "Status - Get list",
-          "request": { "method": "GET", "url": "{{vdr_base}}/status/list/:listId" }
+          "request": { "method": "GET", "url": "{{vdr_base}}/status/list/:listId", "description": "Obtiene el bitstring comprimido de la StatusList." }
         },
         {
           "name": "Status - Allocate index",
@@ -509,17 +708,31 @@
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": { "mode": "raw", "raw": "{}" },
-            "url": "{{vdr_base}}/status/list/:listId/allocate"
+            "url": "{{vdr_base}}/status/list/:listId/allocate",
+            "description": "Asigna el próximo índice libre en la StatusList. Retorna { statusListIndex }."
+          }
+        },
+        {
+          "name": "Status - Revoke index",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"statusListIndex\": 0\n}"
+            },
+            "url": "{{vdr_base}}/status/list/:listId/revoke",
+            "description": "Revoca un índice en la StatusList (flipea el bit a 1). Irreversible."
           }
         },
         {
           "name": "Status - Is revoked",
-          "request": { "method": "GET", "url": "{{vdr_base}}/status/revoked/:listId/:index" }
+          "request": { "method": "GET", "url": "{{vdr_base}}/status/revoked/:listId/:index", "description": "Consulta si un índice específico fue revocado. Retorna { revoked: true/false }." }
         }
       ]
     },
     {
-      "name": "9. KMS Service (puerto 4001)",
+      "name": "10. KMS Service (puerto 4001)",
       "item": [
         {
           "name": "Health",

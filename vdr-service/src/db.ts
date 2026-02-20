@@ -34,6 +34,12 @@ export async function openDidDb(dbPath?: string) {
       next_index INTEGER DEFAULT 0,
       updated_at INTEGER
     );
+    CREATE TABLE IF NOT EXISTS credential_status_map (
+      credential_id TEXT PRIMARY KEY,
+      status_list_id TEXT NOT NULL,
+      status_list_index INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
   `)
 
   return db

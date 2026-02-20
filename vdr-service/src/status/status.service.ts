@@ -120,4 +120,34 @@ export class StatusService {
     ])
     return nextIndex
   }
+
+  /**
+   * Registra el mapeo credentialId → (statusListId, statusListIndex).
+   * Credo no soporta credentialStatus en JSON-LD, así que el mapeo se mantiene externo.
+   */
+  async registerCredentialMapping(credentialId: string, statusListId: string, statusListIndex: number): Promise<void> {
+    const db = await this.dbPromise
+    await db.run(
+      'INSERT OR REPLACE INTO credential_status_map (credential_id, status_list_id, status_list_index, created_at) VALUES (?, ?, ?, ?)',
+      [credentialId, statusListId, statusListIndex, Date.now()]
+    )
+  }
+
+  /**
+   * Consulta el estado de revocación de una credencial por su ID (urn:uuid:xxx).
+   * Busca el mapeo y luego verifica el bit en la StatusList.
+   */
+  async isCredentialRevoked(credentialId: string): Promise<{ revoked: boolean; statusListId?: string; statusListIndex?: number } | null> {
+    const db = await this.dbPromise
+    const row = await db.get(
+      'SELECT status_list_id, status_list_index FROM credential_status_map WHERE credential_id = ?',
+      [credentialId]
+    )
+    if (!row) return null
+
+    const statusListId = (row as any).status_list_id as string
+    const statusListIndex = (row as any).status_list_index as number
+    const revoked = await this.isRevoked(statusListId, statusListIndex)
+    return { revoked, statusListId, statusListIndex }
+  }
 }

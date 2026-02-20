@@ -45,7 +45,8 @@ export class StatusController {
   }
 
   /**
-   * Verifica si un indice esta revocado. Retorna { revoked: boolean }.
+   * Verifica si un indice esta revocado por listId + index (bajo nivel / debug).
+   * Para consultar por credentialId, usar GET /status/credential/:id/revoked.
    */
   @Get('revoked/:listId/:index')
   async isRevoked(@Param('listId') listId: string, @Param('index') index: string) {
@@ -67,5 +68,30 @@ export class StatusController {
     }
     await this.svc.revoke(id, index)
     return { ok: true, revoked: index }
+  }
+
+  /**
+   * Registra el mapeo credentialId → (statusListId, statusListIndex).
+   * El issuer llama a esto al emitir una credencial, ya que Credo no soporta
+   * credentialStatus embebido en JSON-LD.
+   */
+  @Post('credential-map')
+  async registerMapping(@Body() body: { credentialId?: string; statusListId?: string; statusListIndex?: number }) {
+    if (!body?.credentialId || !body?.statusListId || typeof body?.statusListIndex !== 'number') {
+      throw new BadRequestException('credentialId, statusListId, statusListIndex required')
+    }
+    await this.svc.registerCredentialMapping(body.credentialId, body.statusListId, body.statusListIndex)
+    return { ok: true }
+  }
+
+  /**
+   * Consulta el estado de revocación de una credencial por su ID (urn:uuid:xxx).
+   * Retorna { revoked, statusListId, statusListIndex } o 404 si no hay mapeo.
+   */
+  @Get('credential/:credentialId/revoked')
+  async isCredentialRevoked(@Param('credentialId') credentialId: string) {
+    const result = await this.svc.isCredentialRevoked(credentialId)
+    if (!result) throw new NotFoundException(`No revocation mapping found for credential ${credentialId}`)
+    return result
   }
 }

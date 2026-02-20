@@ -9,4 +9,3 @@ import { CommonModule } from './common/common.module'
   imports: [CommonModule, InvitationModule, ConnectionsModule, CredentialsModule],
 })
 export class AppModule {}
-

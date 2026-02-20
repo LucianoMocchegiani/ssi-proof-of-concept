@@ -111,6 +111,16 @@ const NOT_VERIFIED_ASCII = `
 ╚═══════════════════════════╝
 `
 
+const REVOKED_ASCII = `
+╔═══════════════════════════════════╗
+║                                   ║
+║   ⊘  REVOKED                      ║
+║   Credential has been revoked     ║
+║   Presentation rejected           ║
+║                                   ║
+╚═══════════════════════════════════╝
+`
+
 /** Listeners: cuando llega proof request, selecciona credenciales y envía presentation. */
 function setupProofListeners(agent: Agent) {
   agent.events.on(DidCommProofEventTypes.ProofStateChanged as any, async ({ payload }) => {
@@ -128,7 +138,13 @@ function setupProofListeners(agent: Agent) {
       } else if (record.state === DidCommProofState.Done) {
         console.log(VERIFIED_ASCII)
       } else if (record.state === DidCommProofState.Declined || record.state === DidCommProofState.Abandoned) {
-        console.log(NOT_VERIFIED_ASCII)
+        const errorMsg = (record as any).errorMessage ?? (record as any).problemReportMessage?.description?.en ?? ''
+        if (errorMsg.toLowerCase().includes('revoked')) {
+          console.log(REVOKED_ASCII)
+        } else {
+          console.log(NOT_VERIFIED_ASCII)
+          if (errorMsg) console.log(`[Holder] Reason: ${errorMsg}`)
+        }
       }
     } catch (err) {
       console.log(NOT_VERIFIED_ASCII)

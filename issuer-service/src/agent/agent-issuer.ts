@@ -12,6 +12,7 @@ import {
   DidCommEventTypes,
 } from '@credo-ts/didcomm'
 import type { DidCommCredentialExchangeRecord } from '@credo-ts/didcomm'
+import { randomUUID } from 'crypto'
 import { envConfig } from '../config'
 import { issuerAgentConfig } from './agent-issuer.config'
 import { registerWalletAdapter } from './agent-issuer-wallet'
@@ -19,6 +20,7 @@ import { buildKeyManagementModule, registerKmsConfig } from './agent-issuer-kms'
 import { buildDidsModule } from './agent-issuer-dids'
 import { DidCommWsOutboundTransportDelayedClose } from '../transport/ws-outbound-delayed-close.transport'
 import { getIssuerDid } from './issuer-did-store'
+import { getStatusList, hasStatusList } from './issuer-status-list-store'
 
 /**
  * Inicializa el agente Credo del issuer.
@@ -100,7 +102,6 @@ function setupCredentialListeners(agent: Agent) {
     try {
       switch (record.state) {
         case DidCommCredentialState.ProposalReceived: {
-          // eslint-disable-next-line no-console
           console.log('Issuer: Proposal received, sending offer...')
           const issuerDid = getIssuerDid()
           const formatData = await agent.didcomm.credentials.getFormatData(record.id)
@@ -109,8 +110,11 @@ function setupCredentialListeners(agent: Agent) {
           if (proposalJsonLd?.credential) {
             const proposed = proposalJsonLd.credential
             const customTypes = (proposed.type ?? []).filter((t: string) => t !== 'VerifiableCredential')
+            const credentialId = proposed.id || `urn:uuid:${randomUUID()}`
+
             const credential = {
               ...proposed,
+              id: credentialId,
               '@context': proposed['@context']?.length > 1
                 ? proposed['@context']
                 : [
@@ -120,6 +124,7 @@ function setupCredentialListeners(agent: Agent) {
                   ],
               issuer: proposed.issuer || issuerDid,
             }
+
             await agent.didcomm.credentials.negotiateProposal({
               credentialExchangeRecordId: record.id,
               credentialFormats: {
@@ -130,6 +135,8 @@ function setupCredentialListeners(agent: Agent) {
               },
               comment: 'JSON-LD Credential Offer',
             })
+
+            await registerRevocationMapping(credentialId)
           } else {
             await agent.didcomm.credentials.acceptProposal({
               credentialExchangeRecordId: record.id,
@@ -156,6 +163,30 @@ function setupCredentialListeners(agent: Agent) {
       console.error('Credential listener error:', err)
     }
   })
+}
+
+/**
+ * Reserva un índice en la StatusList y registra el mapeo en el VDR.
+ * Se usa tanto desde offerCredential (flujo 1) como desde el listener de proposals (flujo 2).
+ */
+async function registerRevocationMapping(credentialId: string): Promise<void> {
+  if (!hasStatusList()) return
+  try {
+    const vdrUrl = envConfig.vdrServiceUrl.replace(/\/$/, '')
+    const sl = getStatusList()
+    const allocRes = await fetch(`${vdrUrl}/status/list/${sl.id}/allocate`, { method: 'POST' })
+    if (!allocRes.ok) return
+    const { statusListIndex } = await allocRes.json() as { statusListIndex: number }
+
+    await fetch(`${vdrUrl}/status/credential-map`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ credentialId, statusListId: sl.id, statusListIndex }),
+    })
+    console.log(`[Issuer] Revocation mapping: ${credentialId} → list=${sl.id} index=${statusListIndex}`)
+  } catch {
+    console.warn(`[Issuer] Could not register revocation mapping for ${credentialId}`)
+  }
 }
 
 /** Obtiene o crea el did:custom del issuer. Se llama al arrancar. */
@@ -187,4 +218,21 @@ export async function ensureIssuerDid(agent: Agent): Promise<string> {
   const did = result.didState?.did ?? (result as any).did
   if (!did) throw new Error('Failed to create issuer DID')
   return did
+}
+
+/**
+ * Crea una StatusList en el VDR si no existe.
+ * Se llama al arrancar para que el issuer pueda revocar credenciales.
+ */
+export async function ensureStatusList(issuerDid: string): Promise<{ id: string; url: string }> {
+  const vdrUrl = envConfig.vdrServiceUrl.replace(/\/$/, '')
+  const res = await fetch(`${vdrUrl}/status/list`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ issuerId: issuerDid }),
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to create StatusList: ${res.status} ${await res.text()}`)
+  }
+  return res.json() as Promise<{ id: string; url: string }>
 }

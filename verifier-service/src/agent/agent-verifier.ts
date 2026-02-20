@@ -117,13 +117,95 @@ const NOT_VERIFIED_ASCII = `
 ╚═══════════════════════════╝
 `
 
-/** Log de estados de proof para diagnóstico. */
+const REVOKED_ASCII = `
+╔═══════════════════════════════════╗
+║                                   ║
+║   ⊘  REVOKED                      ║
+║   Credential has been revoked     ║
+║   Presentation rejected           ║
+║                                   ║
+╚═══════════════════════════════════╝
+`
+
+/**
+ * Extrae los IDs de las credenciales presentadas en un proof.
+ * La VC ya no tiene credentialStatus embebido (Credo no lo soporta en JSON-LD),
+ * así que extraemos el credential.id para consultar el mapeo externo en el VDR.
+ */
+async function extractCredentialIds(agent: Agent, proofRecordId: string): Promise<string[]> {
+  try {
+    const formatData = await (agent as any).didcomm.proofs.getFormatData(proofRecordId)
+    const presentation = (formatData as any)?.presentation?.presentationExchange
+    if (!presentation) return []
+    const credentials: unknown[] = presentation.verifiableCredential ?? presentation.credentials ?? []
+    const ids: string[] = []
+    for (const cred of credentials) {
+      const vc = (cred as any)?.credential ?? cred
+      const id = vc?.id ?? vc?.credentialSubject?.id
+      if (typeof id === 'string' && id.startsWith('urn:uuid:')) ids.push(id)
+    }
+    return ids
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Consulta al VDR si una credencial fue revocada, usando el mapeo externo
+ * credentialId → (statusListId, statusListIndex).
+ */
+async function checkCredentialRevocation(credentialId: string): Promise<{ revoked: boolean; statusListId?: string; statusListIndex?: number }> {
+  try {
+    const vdrUrl = envConfig.vdrServiceUrl.replace(/\/$/, '')
+    const res = await fetch(`${vdrUrl}/status/credential/${encodeURIComponent(credentialId)}/revoked`)
+    if (res.status === 404) return { revoked: false }
+    if (!res.ok) return { revoked: false }
+    return await res.json() as { revoked: boolean; statusListId?: string; statusListIndex?: number }
+  } catch {
+    return { revoked: false }
+  }
+}
+
+/** Log de estados de proof + verificación de revocación via mapeo externo. */
 function setupProofListeners(agent: Agent) {
   agent.events.on(DidCommProofEventTypes.ProofStateChanged as any, async ({ payload }) => {
     const record = (payload.proofRecord ?? payload.proofExchangeRecord) as DidCommProofExchangeRecord
     console.log(`[Verifier] Proof ${record.id} state=${record.state}`)
     if (record.state === DidCommProofState.PresentationReceived) {
       try {
+        const credentialIds = await extractCredentialIds(agent, record.id)
+        for (const credId of credentialIds) {
+          const result = await checkCredentialRevocation(credId)
+          if (result.revoked) {
+            console.log(`[Verifier] Credential REVOKED: ${credId} (list=${result.statusListId} index=${result.statusListIndex})`)
+            console.log(REVOKED_ASCII)
+
+            // Notificar al holder vía problem-report
+            try {
+              await (agent as any).didcomm.proofs.sendProblemReport({
+                proofExchangeRecordId: record.id,
+                description: 'Credential has been revoked',
+              })
+            } catch (e) {
+              console.warn('[Verifier] sendProblemReport failed:', (e as Error)?.message)
+            }
+
+            // sendProblemReport no transiciona el estado local del verifier,
+            // así que lo actualizamos manualmente a 'abandoned'
+            try {
+              const fresh = await (agent as any).didcomm.proofs.getById(record.id)
+              if (fresh.state !== 'abandoned' && fresh.state !== 'declined') {
+                fresh.state = 'abandoned'
+                await (agent as any).didcomm.proofs.update(fresh)
+                console.log('[Verifier] Proof state updated to abandoned')
+              }
+            } catch (e) {
+              console.warn('[Verifier] Could not update proof state:', (e as Error)?.message)
+            }
+            return
+          }
+          console.log(`[Verifier] Credential NOT revoked: ${credId}`)
+        }
         await agent.didcomm.proofs.acceptPresentation({ proofExchangeRecordId: record.id })
         console.log(VERIFIED_ASCII)
       } catch (err) {
