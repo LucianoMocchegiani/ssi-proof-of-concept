@@ -12,13 +12,13 @@ En este diseño, el KMS **reemplaza la parte de billetera/criptografía de Askar
 
 | Operacion | Implementado | Descripcion |
 |-----------|---------------|-------------|
-| **Crear claves** | Si (solo Ed25519) | Genera pares Ed25519, persiste en SQLite |
+| **Crear claves** | Si (Ed25519, Bls12381G2) | Genera pares Ed25519 o Bls12381G2, persiste en SQLite |
 | **Almacenar claves** | Si | Persiste publicJwk y privateJwk en tabla `keys` |
-| **Obtener clave publica** | Si | GET /keys/:id retorna JWK publico |
-| **Firmar** | Si (Ed25519) | POST /sign con keyId y data (base64). Retorna signature (base64) |
+| **Obtener clave publica** | Si | GET /keys/:id retorna JWK publico. Resuelve por UUID, JWK thumbprint (RFC 7638) o fingerprint multibase (z6M/z6L) |
+| **Firmar** | Si (Ed25519, BBS) | POST /sign con keyId y data (base64). POST /sign-bbs para BBS. Retorna signature (base64) |
 | **Verificar** | Si (Ed25519) | POST /verify con keyId, data, signature. Retorna { valid } |
-| **Cifrar** | Si | encrypt() soporta ChaCha20-Poly1305 (simétrico) y X25519 key agreement (anoncrypt/authcrypt) |
-| **Descifrar** | Si | decrypt() soporta ChaCha20-Poly1305 y X25519 key agreement |
+| **Cifrar** | Si | encrypt() soporta ChaCha20-Poly1305 con AAD (simétrico) y X25519 key agreement via nacl.box (anoncrypt/authcrypt) |
+| **Descifrar** | Si | decrypt() soporta ChaCha20-Poly1305 con AAD y X25519 key agreement via nacl.box.open |
 | **Random bytes** | Si | POST /random; Credo usa crypto local, no llama al KMS |
 | **Importar clave** | Si | POST /keys/import con privateJwk |
 | **Borrar clave** | Si | DELETE /keys/:id |
@@ -27,8 +27,8 @@ En este diseño, el KMS **reemplaza la parte de billetera/criptografía de Askar
 
 ## ¿Qué NO hace el KMS?
 
-- **No almacena** conexiones, DIDs, credenciales ni metadata de agentes → eso es del Storage
-- **No resuelve DIDs** → eso lo hace el DID Resolver (que usa Storage)
+- **No almacena** conexiones, DIDs, credenciales ni metadata de agentes → eso es del Wallet (ex-Storage)
+- **No resuelve DIDs** → eso lo hace el DID Resolver (que usa Wallet)
 - **No decide** qué firmar ni cuándo → solo ejecuta las operaciones que le piden
 
 ---
@@ -37,11 +37,39 @@ En este diseño, el KMS **reemplaza la parte de billetera/criptografía de Askar
 
 | Tipo | Implementado | Uso en nuestro sistema |
 |------|--------------|------------------------|
-| **Ed25519** | Si | createKey() genera solo Ed25519. Uso: claves de DID (did:custom), DidDocument |
-| **Otros (X25519, EC, etc.)** | No | El KMS ignora `type` en POST /keys y siempre crea Ed25519 |
+| **Ed25519** | Si | createKey() genera Ed25519. Uso: claves de DID (did:custom), DidDocument, DIDComm |
+| **Bls12381G2** | Si (solo kms-service) | createKey(type: 'Bls12381G2'). Uso: firmas BBS para ZKP/selective disclosure |
+| **X25519** | Derivado | No se crea directamente. Se deriva de Ed25519 via `ed2curve.convertSecretKey()` para key agreement DIDComm |
+| **Otros (EC, etc.)** | No | No implementados |
 | **Importar JWK** | Si | importKey() acepta cualquier privateJwk |
 
-Para DIDComm, Credo puede usar claves propias o del KMS segun el flujo. Nuestro createKey solo produce Ed25519.
+Para DIDComm, Credo puede usar claves propias o del KMS segun el flujo. Nuestro createKey produce Ed25519; la conversión a X25519 para key agreement se hace internamente al momento de cifrar/descifrar.
+
+---
+
+## Algoritmos criptográficos
+
+Credo llama al KMS con algoritmos específicos para cada paso del flujo DIDComm v1:
+
+| Paso | Algoritmo | Primitiva | Uso |
+|------|-----------|-----------|-----|
+| **Key agreement** | `ECDH-HSALSA20` | X25519 ECDH + nacl.box (XSalsa20-Poly1305) | Cifrar/descifrar claves de recipient y sender key |
+| **Wrapping** | `XSALSA20-POLY1305` | nacl.box / nacl.box.open (24-byte nonce) | Envolver la CEK para cada recipient (authcrypt con sender key, anoncrypt con ephemeral key) |
+| **Content encryption** | `C20P` | ChaCha20-Poly1305 (12-byte IV, 16-byte tag) | Cifrar/descifrar el contenido del mensaje DIDComm con AAD (protected header) |
+
+### Flujo de cifrado DIDComm v1 (3 llamadas al KMS)
+
+1. **Encrypt sender key** (anoncrypt): `nacl.box` con ephemeral key pair → `[ephemeralPub(32) | nonce(24) | boxed]`
+2. **Encrypt CEK por recipient** (authcrypt): `nacl.box` con sender key → `{ encrypted, iv(nonce) }`
+3. **Encrypt contenido** (simétrico): `chacha20-poly1305` con CEK, IV de 12 bytes, tag de 16 bytes, y AAD (el protected header del JWE)
+
+### Flujo de descifrado DIDComm v1 (3 llamadas al KMS)
+
+1. **Decrypt sender key** (anoncrypt): extrae `ephemeralPub + nonce + boxed`, `nacl.box.open` con recipient key
+2. **Decrypt CEK** (authcrypt): `nacl.box.open` con sender pub + recipient key + IV(nonce)
+3. **Decrypt contenido** (simétrico): `chacha20-poly1305` con CEK, IV, tag, y AAD
+
+> **Importante**: El AAD (Additional Authenticated Data) en el paso de contenido es el protected header del JWE codificado como UTF-8. Sin AAD, la autenticación del tag falla.
 
 ---
 
@@ -56,7 +84,7 @@ Definen la **identidad** del agente y permiten comunicarse de forma segura.
 | Uso | Qué pasa |
 |-----|----------|
 | **Firmar** (Ed25519) | El issuer firma credenciales y Connection Response con su clave privada. El receptor verifica la firma usando la clave pública del issuer, obtenida al resolver su didDocument. |
-| **Cifrar/descifrar** (X25519) | En DIDComm los mensajes van cifrados. Con la clave pública del otro cifras; con tu clave privada descifras lo que te envían. |
+| **Cifrar/descifrar** (X25519) | En DIDComm los mensajes van cifrados. La clave Ed25519 se convierte a X25519 via `ed2curve` para key agreement. Con la clave pública del otro cifras; con tu clave privada descifras lo que te envían. |
 | **Autenticación** | "Soy el holder del DID X" se demuestra firmando un challenge con la clave privada. |
 
 **Importancia**: Sin estas claves no hay identidad verificable ni comunicación segura. Son el núcleo del sistema.
@@ -73,6 +101,7 @@ Se crean para **una operación puntual** y luego se borran.
 |-----|----------|
 | **Cifrado JARM** (OpenID4VC) | El verifier genera una clave temporal en el KMS, cifra la respuesta JARM (metadata del authorization server) con la clave pública del cliente y la borra. El holder descifra con su clave privada. Solo quien posee el par de claves correspondiente puede leer la respuesta. |
 | **Acuerdo de claves** | En flujos ECDH o DIDComm se crea una clave efímera para derivar una clave compartida, se usa una sola vez y se elimina del KMS. Minimiza la superficie de ataque: si el servidor cae, esa sesión ya expiró. |
+| **Anoncrypt DIDComm** | Para cifrar la sender key en DIDComm v1 authcrypt, se genera un par X25519 efímero con `nacl.box.keyPair()`. La clave pública se incluye en el payload; la privada se descarta inmediatamente después del cifrado. |
 
 **Importancia**: Minimizan el daño si el servidor se compromete. Una clave efímera comprometida solo afecta esa operación concreta; las claves de identidad (DID) siguen intactas.
 
@@ -128,12 +157,30 @@ Las claves permiten que el sistema sea **confidencial** (solo el destinatario le
 | Necesidad de Credo | Nuestro KMS | Nota |
 |--------------------|-------------|------|
 | **Crear DID** (createKey) | Si | CustomDidRegistrar llama kms.createKey() -> Ed25519 |
-| **Obtener clave publica** (getPublicKey) | Si | Para DidRecord, resolver, etc. |
-| **Firmar** | Si | sign() delega a kms-service vía POST /sign (Ed25519) |
-| **Verificar** | Si | verify() usa publicJwk local o delega a kms-service vía POST /verify |
-| **Cifrar/descifrar** DIDComm | Si | ChaCha20-Poly1305 + X25519 key agreement (anoncrypt/authcrypt) |
+| **Obtener clave publica** (getPublicKey) | Si | Para DidRecord, resolver, etc. Resuelve por UUID, thumbprint o fingerprint multibase |
+| **Firmar** | Si | sign() delega a kms-service vía POST /sign (Ed25519) o firma localmente (interno) |
+| **Verificar** | Si | verify() usa publicJwk local con `crypto.verify` de Node.js (ambos modos) o delega vía POST /verify (externo con keyId) |
+| **Cifrar/descifrar** DIDComm | Si | ECDH-HSALSA20 + XSALSA20-POLY1305 (nacl.box) para key agreement; C20P/ChaCha20-Poly1305 con AAD para contenido |
+| **Firma BBS** (solo externo) | Si | kms-service soporta Bls12381G2 y POST /sign-bbs para selective disclosure |
 
-El agente usa `InternalKeyManagementService` (KMS interno) o `ExternalKeyManagementService` (KMS externo) según la variable `KMS_MODE`. Ambos soportan todas las operaciones necesarias para el flujo completo: createKey, getPublicKey, sign, verify, encrypt y decrypt. La verificación con `publicJwk` (sin keyId) se hace localmente con `crypto.verify` de Node.js. `randomBytes` también se ejecuta localmente en ambos modos.
+El agente usa `InternalKeyManagementService` (KMS interno) o `ExternalKeyManagementService` (KMS externo) según la variable `KMS_MODE`. Ambos soportan todas las operaciones necesarias para el flujo DIDComm completo: createKey, getPublicKey, sign, verify, encrypt y decrypt. La verificación con `publicJwk` (sin keyId) se hace localmente con `crypto.verify` de Node.js en ambos modos. `randomBytes` también se ejecuta localmente en ambos modos.
+
+---
+
+## Resolución de keyId (kms-service)
+
+El `kms-service` (modo externo) implementa resolución flexible de keyId. Credo puede pasar diferentes formatos de identificador:
+
+| Formato | Ejemplo | Resolución |
+|---------|---------|------------|
+| **UUID directo** | `a1b2c3d4-...` | Búsqueda directa por `id` en tabla `keys` |
+| **JWK Thumbprint Ed25519** (RFC 7638) | `abc123...` (base64url SHA-256) | Calcula thumbprint de cada clave y compara |
+| **JWK Thumbprint X25519** | `xyz789...` | Convierte Ed25519→X25519, calcula thumbprint y compara |
+| **Fingerprint multibase Ed25519** | `z6Mk...` | Multicodec 0xed01 + base58btc |
+| **Fingerprint multibase X25519** | `z6LS...` | Convierte Ed25519→X25519, multicodec 0xec01 + base58btc |
+| **DID fragment** | `did:custom:abc#z6Mk...` | Extrae la parte después de `#` y resuelve |
+
+El KMS interno no necesita esta resolución porque Credo siempre le pasa el `keyId` UUID directo (que es el mismo que se usó al crear la clave localmente).
 
 ---
 
@@ -142,23 +189,32 @@ El agente usa `InternalKeyManagementService` (KMS interno) o `ExternalKeyManagem
 | Metodo | Ruta | Descripcion |
 |--------|------|-------------|
 | GET | `/health` | Health check |
-| POST | `/keys` | Crear clave Ed25519. Body: `{ keyId?: string }`. Ignora `type` si Credo lo envia. |
-| GET | `/keys/:id` | Obtener clave publica (JWK). 404 si no existe. |
+| POST | `/keys` | Crear clave. Body: `{ keyId?: string, type?: { kty, crv } \| { keyType: 'Bls12381G2' } }`. Default: Ed25519. |
+| GET | `/keys/:id` | Obtener clave publica (JWK o publicKeyBase58 para BLS). Resuelve por UUID, thumbprint o fingerprint. 404 si no existe. |
 | POST | `/keys/import` | Importar clave privada. Body: `{ privateJwk }` |
 | DELETE | `/keys/:id` | Borrar clave |
 | POST | `/random` | Bytes aleatorios. Body: `{ length?: number }`. Retorna `{ random: "base64..." }` |
 | POST | `/sign` | Firmar con Ed25519. Body: `{ keyId, data (base64) }`. Retorna `{ signature (base64) }` |
+| POST | `/sign-bbs` | Firmar con BBS (Bls12381G2). Body: `{ keyId, data (base64) }`. Retorna `{ proofValue (base64url) }` |
 | POST | `/verify` | Verificar firma Ed25519. Body: `{ keyId, data, signature }`. Retorna `{ valid }` |
-| POST | `/encrypt` | Cifrar. Body: `{ key, encryption?, data (base64) }`. Soporta ChaCha20-Poly1305 y X25519 key agreement. |
+| POST | `/encrypt` | Cifrar. Body: `{ key, encryption?, data (base64) }`. Soporta C20P con AAD y X25519 key agreement (nacl.box). |
 | POST | `/decrypt` | Descifrar. Body: `{ key, encryption?, encrypted (base64), iv?, tag? }`. |
 
 ---
 
 ## Persistencia
 
+### kms-service (modo externo)
+
 - **POC**: SQLite en `./data/kms.sqlite`
-- **Tabla `keys`**: `id`, `publicJwk`, `privateJwk`
+- **Tabla `keys`**: `id`, `keyType`, `publicJwk`, `privateJwk`
+- `keyType`: `'Ed25519'` o `'Bls12381G2'`
 - **Producción**: HSM, Cloud KMS (AWS KMS, Azure Key Vault), o almacén cifrado con master key
+
+### KMS interno (modo interno)
+
+- **POC**: SQLite en `./data/internal-kms.sqlite` (por agente)
+- **Tabla `keys`**: `id`, `publicJwk`, `privateJwk` (sin `keyType`, solo Ed25519)
 
 ---
 
@@ -172,12 +228,13 @@ Con 3 agentes (issuer, holder, verifier) todos usan el **mismo KMS** y la **mism
 kms.sqlite
   |
   +-- tabla: keys
-        | id (PRIMARY KEY)  | publicJwk  | privateJwk  |
-        |-------------------|-------------|--------------|
-        | uuid-issuer-1      | {...}       | {...}        |
-        | uuid-holder-1     | {...}       | {...}        |
-        | uuid-verifier-1   | {...}       | {...}        |
-        | ...               | ...         | ...          |
+        | id (PRIMARY KEY)  | keyType   | publicJwk  | privateJwk  |
+        |-------------------|-----------|-------------|--------------|
+        | uuid-issuer-1     | Ed25519   | {...}       | {...}        |
+        | uuid-holder-1     | Ed25519   | {...}       | {...}        |
+        | uuid-verifier-1   | Ed25519   | {...}       | {...}        |
+        | uuid-bls-1        | Bls12381G2| {...}       | {...}        |
+        | ...               | ...       | ...         | ...          |
 ```
 
 **No hay separacion por agente**: todas las claves van a la misma tabla. Se distinguen solo por `id` (keyId). Credo genera un UUID unico por cada `createKey()`, asi que no hay colision entre agentes.
@@ -203,12 +260,35 @@ No hay base compartida. Las claves privadas nunca salen del proceso del agente.
 
 ---
 
+## Dependencias
+
+### kms-service (modo externo)
+
+| Dependencia | Uso |
+|-------------|-----|
+| `tweetnacl` | nacl.box / nacl.box.open para X25519 key agreement (XSalsa20-Poly1305) |
+| `ed2curve` | Conversión Ed25519 → X25519 (pares de claves) |
+| `bs58` | Codificación base58 para fingerprints multibase |
+| `@mattrglobal/bbs-signatures` | Firma BBS con claves Bls12381G2 |
+| `sqlite3` (async) | Persistencia de claves |
+
+### KMS interno (InternalKeyManagementService)
+
+| Dependencia | Uso |
+|-------------|-----|
+| `tweetnacl` | nacl.box / nacl.box.open para X25519 key agreement |
+| `ed2curve` | Conversión Ed25519 → X25519 |
+| `better-sqlite3` | Persistencia local SQLite (síncrono, más rápido) |
+| Node.js `crypto` | Ed25519 sign/verify, ChaCha20-Poly1305 simétrico, randomBytes |
+
+---
+
 ## Variables de entorno
 
 | Variable | Default | Descripcion |
 |----------|---------|-------------|
-| `KMS_SERVICE_PORT` | 4001 | Puerto HTTP (usado en main.ts) |
-| `KMS_SQLITE_PATH` | `./data/kms.sqlite` | Ruta del archivo SQLite |
+| `KMS_SERVICE_PORT` | 4001 | Puerto HTTP del kms-service (usado en main.ts) |
+| `KMS_SQLITE_PATH` | `./data/kms.sqlite` | Ruta del archivo SQLite del kms-service |
 
 ---
 
@@ -228,13 +308,19 @@ No hay base compartida. Las claves privadas nunca salen del proceso del agente.
 | Funcionalidad | Estado |
 |---------------|--------|
 | Crear DID (kms.createKey) | OK - Ed25519 |
-| Obtener clave publica | OK |
+| Crear clave BLS (kms.createKey) | OK - Bls12381G2 (solo kms-service) |
+| Obtener clave publica | OK - con resolución por UUID, thumbprint, fingerprint |
 | Importar clave | OK |
 | Borrar clave | OK |
 | Random bytes (POST /random) | OK - KMS; Credo usa crypto local |
-| Firmar | OK - Ed25519 |
-| Verificar | OK - Ed25519 |
-| Cifrar/descifrar DIDComm | OK - ChaCha20-Poly1305 + X25519 |
+| Firmar Ed25519 | OK |
+| Firmar BBS | OK - (solo kms-service) |
+| Verificar Ed25519 | OK |
+| Cifrar DIDComm (key agreement) | OK - nacl.box (ECDH-HSALSA20 + XSALSA20-POLY1305) |
+| Cifrar DIDComm (contenido) | OK - ChaCha20-Poly1305 (C20P) con AAD |
+| Descifrar DIDComm (key agreement) | OK - nacl.box.open |
+| Descifrar DIDComm (contenido) | OK - ChaCha20-Poly1305 (C20P) con AAD |
+| Interoperabilidad internal ↔ external | OK - mismos algoritmos y formatos |
 
 ---
 
@@ -242,7 +328,7 @@ No hay base compartida. Las claves privadas nunca salen del proceso del agente.
 
 | Variable | Valor | Efecto |
 |----------|-------|--------|
-| `KMS_MODE: "internal"` | KMS interno | Cripto local (Node.js `crypto`) + SQLite local por agente. Las claves privadas nunca salen del proceso. Ideal para holders / wallets personales. |
+| `KMS_MODE: "internal"` | KMS interno | Cripto local (`tweetnacl` + `ed2curve` + Node.js `crypto`) + SQLite local por agente. Las claves privadas nunca salen del proceso. Ideal para holders / wallets personales. |
 | `KMS_MODE: "external"` | **Actual** | Delega cripto al kms-service vía HTTP. SQLite centralizado. Ideal para issuers y verifiers industriales (reemplazable por HSM/Cloud KMS en producción). |
 
 **Variables adicionales:**
@@ -256,10 +342,14 @@ No hay base compartida. Las claves privadas nunca salen del proceso del agente.
 
 | Aspecto | KMS interno | KMS externo |
 |---------|-------------|-------------|
-| Cripto | Local (Node.js `crypto`) | Delegada a kms-service |
-| Persistencia | SQLite local por agente | SQLite centralizado en kms-service |
+| Cripto key agreement | Local (`tweetnacl` nacl.box + `ed2curve`) | Delegada a kms-service (mismas libs) |
+| Cripto simétrica | Local (Node.js `crypto` chacha20-poly1305) | Delegada a kms-service |
+| Firma/verificación | Local (Node.js `crypto` Ed25519) | Delegada a kms-service |
+| Persistencia | SQLite local por agente (`better-sqlite3`) | SQLite centralizado en kms-service |
 | Clave privada | Vive en el proceso del agente | Vive en el servicio externo |
+| Resolución keyId | Solo UUID directo | UUID, thumbprint, fingerprint multibase |
+| BLS/BBS | No soportado | Soportado (Bls12381G2) |
 | Escalabilidad | Un SQLite por instancia | Múltiples agentes comparten un KMS |
 | Producción | Wallet móvil, TEE | HSM, AWS KMS, Azure Key Vault |
 
-El flujo completo (OOB, DIDComm, conexiones, emisión de credenciales, presentación de proofs) funciona con ambos modos.
+El flujo completo (OOB, DIDComm, conexiones, emisión de credenciales, presentación de proofs) funciona con ambos modos y son **interoperables** entre sí (un agente en modo interno puede comunicarse con uno en modo externo).
