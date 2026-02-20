@@ -121,20 +121,118 @@ const REVOKED_ASCII = `
 ╚═══════════════════════════════════╝
 `
 
+/**
+ * PEX con submission_requirements pick/min:1 solo selecciona el mínimo.
+ * Esta función completa los descriptores vacíos con las credenciales restantes del wallet,
+ * para que el holder presente TODAS las matching credentials.
+ *
+ * NOTA: proofFormats.presentationExchange tiene la forma { credentials: { [descriptorId]: [...] } }.
+ * Debemos operar sobre pex.credentials, NO sobre pex directamente.
+ */
+async function expandPexSelection(agent: Agent, proofRecordId: string, pex: Record<string, unknown>): Promise<void> {
+  try {
+    const credentialsMap = (pex as any).credentials as Record<string, unknown> | undefined
+    if (!credentialsMap || typeof credentialsMap !== 'object') {
+      console.warn('[Holder] expandPexSelection: no credentials map found in presentationExchange')
+      return
+    }
+
+    const formatData = await (agent as any).didcomm.proofs.getFormatData(proofRecordId)
+    const pd = (formatData as any)?.request?.presentationExchange?.presentation_definition
+    if (!pd?.input_descriptors) return
+
+    const allDescriptorIds: string[] = pd.input_descriptors.map((d: any) => d.id)
+    const assignedIds = new Set(Object.keys(credentialsMap))
+    const freeDescriptors = allDescriptorIds.filter((id: string) => !assignedIds.has(id))
+    if (freeDescriptors.length === 0) return
+
+    const requiredTypes = new Set<string>()
+    for (const desc of pd.input_descriptors as any[]) {
+      for (const field of desc.constraints?.fields ?? []) {
+        const filterConst = field.filter?.contains?.const
+        if (typeof filterConst === 'string') requiredTypes.add(filterConst)
+      }
+    }
+
+    const w3cApi = (agent as any).w3cCredentials
+    if (!w3cApi?.getAll) return
+    const allRecords: any[] = await w3cApi.getAll()
+    if (!allRecords?.length) return
+
+    const usedRecordIds = new Set<string>()
+    for (const val of Object.values(credentialsMap)) {
+      const arr = Array.isArray(val) ? val : [val]
+      for (const c of arr) {
+        const id = (c as any)?.credentialRecord?.id
+        if (id) usedRecordIds.add(id)
+      }
+    }
+
+    const unusedRecords = allRecords.filter((record: any) => {
+      if (usedRecordIds.has(record.id)) return false
+      try {
+        const cred = record.firstCredential
+        if (!cred) return false
+        const credTypes: string[] = cred.type ?? []
+        if (requiredTypes.size === 0) return true
+        return [...requiredTypes].every((rt) => credTypes.includes(rt))
+      } catch {
+        return false
+      }
+    })
+    const toAssign = Math.min(freeDescriptors.length, unusedRecords.length)
+
+    for (let i = 0; i < toAssign; i++) {
+      const record = unusedRecords[i]
+      credentialsMap[freeDescriptors[i]] = [{
+        claimFormat: record.firstCredential.claimFormat,
+        credentialRecord: record,
+      }]
+    }
+
+    if (toAssign > 0) {
+      console.log(`[Holder] Expanded PEX: added ${toAssign} extra credential(s) to presentation`)
+    }
+  } catch (e) {
+    console.warn('[Holder] expandPexSelection failed:', (e as Error)?.message)
+  }
+}
+
 /** Listeners: cuando llega proof request, selecciona credenciales y envía presentation. */
 function setupProofListeners(agent: Agent) {
   agent.events.on(DidCommProofEventTypes.ProofStateChanged as any, async ({ payload }) => {
     const record = (payload.proofRecord ?? payload.proofExchangeRecord) as DidCommProofExchangeRecord
     try {
       if (record.state === DidCommProofState.RequestReceived) {
-        console.log('[Holder] Proof request received, selecting credentials and sending presentation...')
+        console.log('[Holder] Proof request received, selecting credentials...')
         const { proofFormats } = await agent.didcomm.proofs.selectCredentialsForRequest({
           proofExchangeRecordId: record.id,
         })
+
+        const pex = (proofFormats as any)?.presentationExchange
+        if (pex) {
+          await expandPexSelection(agent, record.id, pex)
+          const credMap = (pex as any).credentials ?? {}
+          const entries = Object.entries(credMap)
+          console.log(`[Holder] Presenting ${entries.length} credential(s):`)
+          for (const [descriptorId, creds] of entries) {
+            const credArray = Array.isArray(creds) ? creds : [creds]
+            for (const c of credArray) {
+              let id = 'unknown'
+              try {
+                const rec = (c as any)?.credentialRecord
+                id = rec?.firstCredential?.id ?? rec?.id ?? 'unknown'
+              } catch { /* ignore */ }
+              console.log(`[Holder]   ${descriptorId} → ${id}`)
+            }
+          }
+        }
+
         await agent.didcomm.proofs.acceptRequest({
           proofExchangeRecordId: record.id,
           proofFormats,
         })
+        console.log('[Holder] Presentation sent')
       } else if (record.state === DidCommProofState.Done) {
         console.log(VERIFIED_ASCII)
       } else if (record.state === DidCommProofState.Declined || record.state === DidCommProofState.Abandoned) {

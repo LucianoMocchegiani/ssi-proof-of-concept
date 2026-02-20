@@ -174,40 +174,53 @@ function setupProofListeners(agent: Agent) {
     if (record.state === DidCommProofState.PresentationReceived) {
       try {
         const credentialIds = await extractCredentialIds(agent, record.id)
-        for (const credId of credentialIds) {
+        console.log(`[Verifier] Presentation contains ${credentialIds.length} credential(s)`)
+
+        let hasRevoked = false
+        const revokedIds: string[] = []
+
+        for (let i = 0; i < credentialIds.length; i++) {
+          const credId = credentialIds[i]
           const result = await checkCredentialRevocation(credId)
           if (result.revoked) {
-            console.log(`[Verifier] Credential REVOKED: ${credId} (list=${result.statusListId} index=${result.statusListIndex})`)
-            console.log(REVOKED_ASCII)
-
-            // Notificar al holder vía problem-report
-            try {
-              await (agent as any).didcomm.proofs.sendProblemReport({
-                proofExchangeRecordId: record.id,
-                description: 'Credential has been revoked',
-              })
-            } catch (e) {
-              console.warn('[Verifier] sendProblemReport failed:', (e as Error)?.message)
-            }
-
-            // sendProblemReport no transiciona el estado local del verifier,
-            // así que lo actualizamos manualmente a 'abandoned'
-            try {
-              const fresh = await (agent as any).didcomm.proofs.getById(record.id)
-              if (fresh.state !== 'abandoned' && fresh.state !== 'declined') {
-                fresh.state = 'abandoned'
-                await (agent as any).didcomm.proofs.update(fresh)
-                console.log('[Verifier] Proof state updated to abandoned')
-              }
-            } catch (e) {
-              console.warn('[Verifier] Could not update proof state:', (e as Error)?.message)
-            }
-            return
+            console.log(`[Verifier]   [${i + 1}/${credentialIds.length}] ${credId} → REVOKED (list=${result.statusListId} index=${result.statusListIndex})`)
+            hasRevoked = true
+            revokedIds.push(credId)
+          } else {
+            console.log(`[Verifier]   [${i + 1}/${credentialIds.length}] ${credId} → OK`)
           }
-          console.log(`[Verifier] Credential NOT revoked: ${credId}`)
         }
+
+        if (hasRevoked) {
+          console.log(REVOKED_ASCII)
+          console.log(`[Verifier] Rejected: ${revokedIds.length} revoked credential(s) out of ${credentialIds.length}`)
+
+          try {
+            await (agent as any).didcomm.proofs.sendProblemReport({
+              proofExchangeRecordId: record.id,
+              description: `Credential has been revoked: ${revokedIds.join(', ')}`,
+            })
+          } catch (e) {
+            console.warn('[Verifier] sendProblemReport failed:', (e as Error)?.message)
+          }
+
+          try {
+            const fresh = await (agent as any).didcomm.proofs.getById(record.id)
+            if (fresh.state !== 'abandoned' && fresh.state !== 'declined') {
+              fresh.state = 'abandoned'
+              await (agent as any).didcomm.proofs.update(fresh)
+            }
+          } catch (e) {
+            console.warn('[Verifier] Could not update proof state:', (e as Error)?.message)
+          }
+          return
+        }
+
         await agent.didcomm.proofs.acceptPresentation({ proofExchangeRecordId: record.id })
         console.log(VERIFIED_ASCII)
+        if (credentialIds.length > 0) {
+          console.log(`[Verifier] All ${credentialIds.length} credential(s) verified successfully`)
+        }
       } catch (err) {
         console.error(NOT_VERIFIED_ASCII)
         console.error('[Verifier] Proof accept error:', err)

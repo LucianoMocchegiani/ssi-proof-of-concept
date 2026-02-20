@@ -283,7 +283,7 @@
           }]
         },
         {
-          "name": "3.4 Verifier - Solicitar proof",
+          "name": "3.4 Verifier - Solicitar proof (TODAS las credenciales)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -292,7 +292,20 @@
               "raw": "{\n  \"connectionId\": \"{{connectionId}}\"\n}"
             },
             "url": "{{verifier_base}}/request-proof",
-            "description": "Verifier envía solicitud de prueba. El Holder selecciona credenciales y envía presentación automáticamente. Verificar en consola Verifier/Holder el ASCII art (VERIFIED true/false)."
+            "description": "Sin credentialCount → mode: all. Genera descriptores opcionales (PEX submission_requirements min:1). El holder presenta TODAS las credenciales que tenga. Cada una se verifica individualmente. Ver logs en consola."
+          }
+        },
+        {
+          "name": "3.4b Verifier - Solicitar proof (N exactas)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"connectionId\": \"{{connectionId}}\",\n  \"credentialCount\": 2\n}"
+            },
+            "url": "{{verifier_base}}/request-proof",
+            "description": "Con credentialCount → mode: exact:N. El Holder DEBE tener al menos N credenciales. Si tiene menos, falla. Cada una se verifica individualmente."
           }
         },
         {
@@ -307,7 +320,7 @@
     },
     {
       "name": "4. Flujo Revocación (Issuer revoca, Verifier rechaza)",
-      "description": "Flujo completo de revocación. Requiere haber ejecutado el flujo 1 (o 2) para tener una credencial emitida.\n\nSolo se necesita el credentialId (urn:uuid:xxx) de la credencial a revocar. El issuer resuelve automáticamente el statusListIndex desde el mapeo en el VDR.\n\nPasos:\n1. Listar credenciales y obtener credentialId\n2. Consultar que aún NO está revocada\n3. Revocar la credencial desde el Issuer (enviando credentialId)\n4. Confirmar que ahora SÍ está revocada\n5. Presentar la credencial revocada al Verifier → será rechazada",
+      "description": "Flujo de revocación. Requiere haber ejecutado el flujo 1 (o 2) para tener una credencial emitida.\n\nSolo se necesita el credentialId (urn:uuid:xxx) de la credencial a revocar. El issuer resuelve automáticamente el statusListIndex desde el mapeo en el VDR.\n\nPasos:\n1. Listar credenciales y obtener credentialId\n2. Consultar que aún NO está revocada\n3. Revocar la credencial desde el Issuer (enviando credentialId)\n4. Confirmar que ahora SÍ está revocada\n\nPara verificar que el Verifier rechaza la credencial revocada, usar el flujo 3 (Present Proof).",
       "item": [
         {
           "name": "4.1 Holder - Listar credenciales (obtener credentialId)",
@@ -360,86 +373,7 @@
           "request": {
             "method": "GET",
             "url": "{{holder_base}}/credential-status/{{credentialId}}",
-            "description": "Consulta al VDR nuevamente. Ahora debería devolver { revoked: true }."
-          }
-        },
-        {
-          "name": "4.5 Verifier - Crear invitación",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{}" },
-            "url": "{{verifier_base}}/create-invitation",
-            "description": "Verifier genera invitación para verificar la credencial revocada."
-          },
-          "event": [{
-            "listen": "test",
-            "script": {
-              "exec": [
-                "const res = pm.response.json();",
-                "if (res.invitation) {",
-                "  pm.collectionVariables.set('invitationUrl', res.invitation);",
-                "  console.log('invitationUrl (verifier) guardada');",
-                "}"
-              ],
-              "type": "text/javascript"
-            }
-          }]
-        },
-        {
-          "name": "4.6 Holder - Recibir invitación (del Verifier)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"invitationUrl\": \"{{invitationUrl}}\"\n}"
-            },
-            "url": "{{holder_base}}/receive-invitation",
-            "description": "Holder recibe invitación del Verifier. Esperar ~5s antes del siguiente paso."
-          }
-        },
-        {
-          "name": "4.7 Verifier - Listar conexiones",
-          "request": {
-            "method": "GET",
-            "url": "{{verifier_base}}/connections",
-            "description": "Obtener connectionId para solicitar proof."
-          },
-          "event": [{
-            "listen": "test",
-            "script": {
-              "exec": [
-                "const res = pm.response.json();",
-                "if (res.connections && res.connections.length > 0) {",
-                "  const c = res.connections.find(x => x.state === 'completed') || res.connections[0];",
-                "  pm.collectionVariables.set('connectionId', c.id);",
-                "  console.log('connectionId (verifier) guardado');",
-                "}"
-              ],
-              "type": "text/javascript"
-            }
-          }]
-        },
-        {
-          "name": "4.8 Verifier - Solicitar proof (credencial revocada)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"connectionId\": \"{{connectionId}}\"\n}"
-            },
-            "url": "{{verifier_base}}/request-proof",
-            "description": "Verifier solicita proof. El Holder envía la credencial revocada. El Verifier la detecta como REVOKED y la rechaza.\n\nVerificar en las consolas:\n- Verifier: banner ⊘ REVOKED\n- Holder: banner ⊘ REVOKED (si recibió el problem-report)"
-          }
-        },
-        {
-          "name": "4.9 Verifier - Listar proofs",
-          "request": {
-            "method": "GET",
-            "url": "{{verifier_base}}/proofs",
-            "description": "Lista intercambios de proof para verificar el resultado. La credencial revocada debería aparecer como rechazada (abandoned)."
+            "description": "Consulta al VDR nuevamente. Ahora debería devolver { revoked: true }. Para verificar que el Verifier rechaza esta credencial, usar el flujo 3 (Present Proof)."
           }
         }
       ]
@@ -573,7 +507,7 @@
           "request": { "method": "GET", "url": "{{verifier_base}}/connections", "description": "Lista conexiones del verifier (para request-proof)." }
         },
         {
-          "name": "Request proof",
+          "name": "Request proof (all)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -582,7 +516,20 @@
               "raw": "{\n  \"connectionId\": \"{{connectionId}}\"\n}"
             },
             "url": "{{verifier_base}}/request-proof",
-            "description": "Envía solicitud de prueba al holder. Requiere connectionId de una conexión verifier-holder."
+            "description": "Sin credentialCount → presenta TODAS las credenciales del holder."
+          }
+        },
+        {
+          "name": "Request proof (N exactas)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"connectionId\": \"{{connectionId}}\",\n  \"credentialCount\": 2\n}"
+            },
+            "url": "{{verifier_base}}/request-proof",
+            "description": "Con credentialCount → el holder DEBE tener al menos N."
           }
         },
         {
