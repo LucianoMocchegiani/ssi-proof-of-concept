@@ -1,0 +1,28 @@
+{
+  "name": "@one/credo",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "peerDependencies": {
+    "@credo-ts/core": "*",
+    "@credo-ts/didcomm": "*",
+    "@credo-ts/node": "*"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "ed2curve": "^0.3.0",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@credo-ts/core": "*",
+    "@credo-ts/didcomm": "*",
+    "@credo-ts/node": "*",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/ed2curve": "^0.2.4",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.3.0"
+  }
+}

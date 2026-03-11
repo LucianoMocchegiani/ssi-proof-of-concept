@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, NotFoundException, BadRequestException, Header } from '@nestjs/common'
+import { Controller, Get, Post, Body, Param, Query, NotFoundException, BadRequestException, Header } from '@nestjs/common'
 import { DidService } from './did.service'
 
 /**
@@ -14,6 +14,12 @@ export class DidController {
   @Get('health')
   health() {
     return { ok: true }
+  }
+
+  /** Lista todos los DIDs registrados. Opcional: ?prefix=did:web:dominio.com: para filtrar. */
+  @Get('dids')
+  async list(@Query('prefix') prefix?: string) {
+    return this.svc.list(prefix)
   }
 
   /** Registra un DID Document. Body: { id, document }. */

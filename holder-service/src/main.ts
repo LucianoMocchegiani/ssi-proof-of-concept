@@ -27,7 +27,7 @@ async function bootstrap() {
   const httpServer = app.getHttpServer()
   const wsServer = new WebSocketServer({ server: httpServer })
 
-  const agent = await initializeHolderAgent(wsServer)
+  const agent = await initializeHolderAgent(wsServer, logger)
   setHolderAgent(agent)
   const did = await ensureHolderDid(agent)
   setHolderDid(did)

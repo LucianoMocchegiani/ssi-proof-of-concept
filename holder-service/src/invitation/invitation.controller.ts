@@ -10,7 +10,7 @@ export class InvitationController {
   async receive(@Body() body: ReceiveInvitationDto) {
     try {
       const outOfBandRecord = await this.invitationService.receiveInvitation(body.invitationUrl)
-      return { ok: true, outOfBandRecordId: outOfBandRecord?.id ?? null }
+      return { ok: true, outOfBandRecordId: (outOfBandRecord as { id?: string })?.id ?? null }
     } catch (err: any) {
       return { error: err?.message ?? String(err) }
     }

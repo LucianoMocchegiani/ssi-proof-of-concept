@@ -23,14 +23,28 @@ export class CredentialsService {
   }
 
   /**
-   * Pide un índice libre al VDR para la StatusList activa.
+   * Resuelve la StatusList que pertenece a un issuerDid consultando al VDR.
+   * Si no se pasa issuerDid, usa la StatusList default del agente.
    */
-  private async allocateStatusIndex(): Promise<{ statusListIndex: number; statusListId: string }> {
-    const sl = getStatusList()
-    const res = await fetch(`${this.vdrUrl}/status/list/${sl.id}/allocate`, { method: 'POST' })
+  private async resolveStatusListId(issuerDid?: string): Promise<string> {
+    if (!issuerDid) return getStatusList().id
+
+    const res = await fetch(`${this.vdrUrl}/status/lists?issuerId=${encodeURIComponent(issuerDid)}`)
+    if (!res.ok) throw new Error(`Failed to query status lists for DID ${issuerDid}: ${res.status}`)
+    const lists = await res.json() as { id: string }[]
+    if (!lists.length) throw new Error(`No StatusList found for DID ${issuerDid}`)
+    return lists[0].id
+  }
+
+  /**
+   * Pide un índice libre al VDR para la StatusList del issuerDid dado.
+   */
+  private async allocateStatusIndex(issuerDid?: string): Promise<{ statusListIndex: number; statusListId: string }> {
+    const listId = await this.resolveStatusListId(issuerDid)
+    const res = await fetch(`${this.vdrUrl}/status/list/${listId}/allocate`, { method: 'POST' })
     if (!res.ok) throw new Error(`Failed to allocate status index: ${res.status}`)
     const data = await res.json() as { statusListIndex: number }
-    return { statusListIndex: data.statusListIndex, statusListId: sl.id }
+    return { statusListIndex: data.statusListIndex, statusListId: listId }
   }
 
   /**
@@ -55,7 +69,7 @@ export class CredentialsService {
     const conn = await agent.didcomm?.connections?.findById(params.connectionId)
     if (!conn) return { error: `Connection ${params.connectionId} not found` }
 
-    const issuerDid = getIssuerDid()
+    const issuerDid = params.issuerDid ?? getIssuerDid()
     const holderDid = conn.theirDid ?? conn.previousTheirDids?.[0]
     const credentialSubject = {
       ...params.credential.credentialSubject,
@@ -66,7 +80,7 @@ export class CredentialsService {
     let statusListIndex: number | undefined
     let statusListId: string | undefined
     try {
-      const alloc = await this.allocateStatusIndex()
+      const alloc = await this.allocateStatusIndex(params.issuerDid)
       statusListIndex = alloc.statusListIndex
       statusListId = alloc.statusListId
     } catch (err) {

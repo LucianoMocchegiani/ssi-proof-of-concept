@@ -43,6 +43,24 @@ export class StatusService {
     return { id, url }
   }
 
+  /** Lista StatusLists. Si se provee issuerId, filtra por ese issuer. */
+  async listStatusLists(issuerId?: string): Promise<{ id: string; issuerId: string; purpose: string; size: number; nextIndex: number }[]> {
+    const db = await this.dbPromise
+    let rows: any[]
+    if (issuerId) {
+      rows = await db.all('SELECT id, issuer_id, purpose, size, next_index FROM status_lists WHERE issuer_id = ?', [issuerId])
+    } else {
+      rows = await db.all('SELECT id, issuer_id, purpose, size, next_index FROM status_lists')
+    }
+    return rows.map((r: any) => ({
+      id: r.id,
+      issuerId: r.issuer_id,
+      purpose: r.purpose,
+      size: r.size,
+      nextIndex: r.next_index,
+    }))
+  }
+
   /**
    * Obtiene la StatusList por id.
    * Retorna el encoded_list (base64 gzip) para que el verifier verifique el bit.

@@ -46,4 +46,9 @@ export class CredentialExchangeDto {
   @IsOptional()
   @IsString()
   proofType?: string
+
+  /** DID del issuer a usar para firmar. Si no se provee, usa el DID default del agente. */
+  @IsOptional()
+  @IsString()
+  issuerDid?: string
 }

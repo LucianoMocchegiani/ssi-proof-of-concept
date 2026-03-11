@@ -52,7 +52,9 @@ services:
     restart: unless-stopped
 
   issuer-service:
-    build: ./issuer-service
+    build:
+      context: .
+      dockerfile: issuer-service/Dockerfile
     ports:
       - "3000:3000"
     environment:
@@ -75,7 +77,9 @@ services:
     restart: unless-stopped
 
   holder-service:
-    build: ./holder-service
+    build:
+      context: .
+      dockerfile: holder-service/Dockerfile
     ports:
       - "9005:9005"
     environment:
@@ -97,7 +101,9 @@ services:
     restart: unless-stopped
 
   verifier-service:
-    build: ./verifier-service
+    build:
+      context: .
+      dockerfile: verifier-service/Dockerfile
     ports:
       - "9004:9004"
     environment:

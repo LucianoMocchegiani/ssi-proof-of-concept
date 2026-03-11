@@ -1,0 +1,16 @@
+{
+  "name": "credo-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "issuer-service",
+    "holder-service",
+    "verifier-service"
+  ],
+  "scripts": {
+    "build:credo": "npm run build -w @one/credo",
+    "build:issuer": "npm run build -w issuer-service",
+    "build:holder": "npm run build -w holder-service",
+    "build:verifier": "npm run build -w verifier-service"
+  }
+}

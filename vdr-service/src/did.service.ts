@@ -34,4 +34,16 @@ export class DidService {
     await db.run('DELETE FROM documents WHERE id = ?', [id])
     return { deleted: id }
   }
+
+  /** Lista todos los DIDs registrados. Opcionalmente filtra por prefijo. */
+  async list(prefix?: string): Promise<{ id: string; document: object }[]> {
+    const db = await this.dbPromise
+    let rows: any[]
+    if (prefix) {
+      rows = await db.all('SELECT id, document FROM documents WHERE id LIKE ?', [`${prefix}%`])
+    } else {
+      rows = await db.all('SELECT id, document FROM documents')
+    }
+    return rows.map((r: any) => ({ id: r.id, document: JSON.parse(r.document) }))
+  }
 }

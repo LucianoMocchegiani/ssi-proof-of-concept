@@ -27,7 +27,7 @@ async function bootstrap() {
   const httpServer = app.getHttpServer()
   const wsServer = new WebSocketServer({ server: httpServer })
 
-  const agent = await initializeVerifierAgent(wsServer)
+  const agent = await initializeVerifierAgent(wsServer, logger)
   setVerifierAgent(agent)
   const did = await ensureVerifierDid(agent)
   setVerifierDid(did)

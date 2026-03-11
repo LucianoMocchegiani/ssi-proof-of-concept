@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, NotFoundException, BadRequestException } from '@nestjs/common'
+import { Controller, Get, Post, Body, Param, Query, NotFoundException, BadRequestException } from '@nestjs/common'
 import { StatusService } from './status.service'
 
 /**
@@ -10,6 +10,12 @@ import { StatusService } from './status.service'
 @Controller('status')
 export class StatusController {
   constructor(private readonly svc: StatusService) {}
+
+  /** Lista StatusLists. Opcional: ?issuerId=did:web:... para filtrar por issuer. */
+  @Get('lists')
+  async listStatusLists(@Query('issuerId') issuerId?: string) {
+    return this.svc.listStatusLists(issuerId)
+  }
 
   /**
    * Crea una nueva StatusList.

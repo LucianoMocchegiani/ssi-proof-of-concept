@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { JsonTransformer } from '@credo-ts/core'
+import { JsonTransformer } from '@one/credo'
 import { holderAgent } from '../agent/agent-store'
 import { getHolderDid } from '../agent/holder-did-store'
 import { envConfig } from '../config'
