@@ -4,6 +4,16 @@ Registro de deuda técnica identificada post-migración a @one/credo. Ordenado p
 
 ---
 
+## Completado (centralización CredentialsService)
+
+- [x] **VDR status client** (`@one/credo/vdr`): allocateStatusIndex, resolveStatusListId, registerCredentialMapping, checkCredentialStatus, revokeCredential
+- [x] **Credential builders** (`@one/credo/utils/credential-builders`): buildOfferCredentialPayload, buildProposalCredentialPayload, buildCredentialContext, getProofOptions, toCredentialPayload
+- [x] **Presentation definition** (`@one/credo/utils/presentation-definition`): buildGenericPresentationDefinition
+- [x] **Credential flows** (`@one/credo/credentials`): offerCredential, proposeCredential, requestProof – flujos completos centralizados
+- [x] **Refactor de issuer/holder/verifier CredentialsService**: Servicios reducidos a capa HTTP/DI que delegan en @one/credo
+
+---
+
 ## 1. Documentación
 
 - [ ] **README `packages/credo`**: Verificar que incluya `logger`, ejemplos actualizados y sección "Centralizado vs no centralizado".

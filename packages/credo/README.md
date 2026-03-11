@@ -77,16 +77,47 @@ const outOfBandRecord = await receiveInvitation(agent, invitationUrl, ourDid)
 
 ## API
 
-- **createIssuerAgent**(config, options?) – Agente solo credentials
+### Agentes
+
+- **createIssuerAgent**(config, options) – Agente solo credentials
 - **createHolderAgent**(config, options?) – Agente credentials + proofs
 - **createVerifierAgent**(config, options?) – Agente solo proofs
 - **ensureDid**(agent, options) – Obtiene o crea did:custom
+- **ensureStatusList**(issuerDid, vdrServiceUrl) – Crea StatusList en VDR
+
+### Invitaciones
+
 - **createInvitation**(agent, invitationDid, options?) – Crea invitación OOB
 - **receiveInvitation**(agent, invitationUrl, ourDid, options?) – Recibe invitación OOB
+
+### VDR Status (revocación)
+
+- **allocateStatusIndex**(vdrUrl, options) – Reserva índice en StatusList
+- **registerCredentialMapping**(vdrUrl, credentialId, statusListId, statusListIndex) – Registra mapeo
+- **checkCredentialStatus**(vdrUrl, credentialId) – Consulta si fue revocada
+- **revokeCredential**(vdrUrl, credentialId) – Revoca credencial
+
+### Credential builders
+
+- **buildOfferCredentialPayload**(params, options) – Payload para offerCredential
+- **buildProposalCredentialPayload**(params, options) – Payload para proposeCredential
+- **getProofOptions**(params) – proofType y proofPurpose
+- **toCredentialPayload**(encoded, json) – Serializa record Credo a JSON
+
+### Credential flows (flujos completos)
+
+- **offerCredential**(agent, params, options) – Ofrece credencial como issuer (alloca status, build, offer, registra en VDR)
+- **proposeCredential**(agent, params, options) – Propone credencial como holder
+- **requestProof**(agent, params) – Solicita prueba como verifier
+
+### Presentation Definition
+
+- **buildGenericPresentationDefinition**(options?) – Genera PEX genérico (credentialCount, credentialTypes)
 
 ## Tipos
 
 - `CredoAgentBaseConfig` – Config base para cualquier agente
+- `CredoLogger` – Logger inyectable (log, warn, error)
 - `WalletConfig` – Config de wallet (internal/external)
 - `KmsConfig` – Config de KMS (internal/external)
-- `CreateAgentOptions` – wsServer, transportCloseDelayMs
+- `CreateAgentOptions` – wsServer, transportCloseDelayMs, logger
